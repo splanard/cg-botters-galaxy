@@ -1,4 +1,10 @@
+// Conf
+var HEALTH_POTIONS_RATIO = 0.20;
+var HEALTH_BACK_RATIO = 0.25;
+
+// Const
 var AGGRO_DISTANCE = 300;
+var MAX_ITEMS = 4;
 
 var _myTeam = parseInt(readline());
 
@@ -14,11 +20,18 @@ for( var i = 0; i < bushAndSpawnPointCount; i++ ){
 	});
 }
 
+var _boots = [];
+var _gadgets = [];
+var _potions = {
+	'health': [],
+	'mana': []
+};
+var _weapons = [];
 var _items = [];
 var itemCount = parseInt(readline()); // useful from wood2
 for( var i = 0; i < itemCount; i++ ){
     var inputs = readline().split(' ');
-	_items.push({
+	var item = {
 		'name': inputs[0], // contains keywords such as BRONZE, SILVER and BLADE, BOOTS connected by "_" to help you sort easier
 		'cost': parseInt(inputs[1]), // BRONZE items have lowest cost, the most expensive items are LEGENDARY
 		'damage': parseInt(inputs[2]), // keyword BLADE is present if the most important item stat is damage
@@ -29,13 +42,76 @@ for( var i = 0; i < itemCount; i++ ){
 		'moveSpeed': parseInt(inputs[7]), // keyword BOOTS is present if the most important item stat is moveSpeed
 		'manaRegeneration': parseInt(inputs[8]),
 		'isPotion': parseInt(inputs[9]) // 0 if it's not instantly consumed
-	});
+	};
+	
+	// Potions
+	if( item.isPotion ){
+		if( item.health > 0 ){
+			_potions.health.push( item );
+		}
+		else if( item.mana > 0 ){
+			_potions.mana.push( item );
+		}
+		else {
+			_items.push( item );
+		}
+	}
+	
+	// Boots
+	else if( item.name.includes( 'Boots' ) ){
+		_boots.push( item );
+	}
+	// Gadgets
+	else if( item.name.includes( 'Gadget' ) ){
+		_gadgets.push( item );
+	}
+	// Weapons
+	else if( item.name.includes( 'Blade' ) ){
+		_weapons.push( item );
+	}
+	
+	else {
+		_items.push( item );
+	}
 }
 
+// Sort potions
+_potions.health.sort( function(a, b){ return a.health - b.health; } );
+_potions.mana.sort( function(a, b){ return a.mana - b.mana; } );
+
+// Sort items
+_boots.sort( sortByCostAsc );
+_gadgets.sort( sortByCostAsc );
+_weapons.sort( sortByCostAsc );
+
+// Giving ranks to items
+for( var i=0; i < _boots.length; i++ ){
+	_boots[i].rank = i;
+}
+for( var i=0; i < _gadgets.length; i++ ){
+	_gadgets[i].rank = i;
+}
+for( var i=0; i < _weapons.length; i++ ){
+	_weapons[i].rank = i;
+}
+
+printErr( 'POTIONS: ' + stringify( _potions ) );
+printErr( 'BOOTS: ' + stringify( _boots ) );
+printErr( 'GADGETS: ' + stringify( _gadgets ) );
+printErr( 'WEAPONS: ' + stringify( _weapons ) );
+printErr( stringify( _items ) );
+
 // game loop
-var _mySide, _myHero, _enemyHero, _myTower, _enemyTower, _units, _battleFront;
+var _myItems = {
+	'boots': -1,
+	'gadget': -1,
+	'weapon': -1
+};
+var _itemsToSell = [];
+var _gold, _availableGold, _mySide, _myHero, _myTower, _enemyHero, _enemyTower, _units, _battleFront;
 while( true ){
-    var gold = parseInt(readline());
+    _gold = parseInt(readline());
+	_availableGold = _gold - _potions.health[0].cost;
     var enemyGold = parseInt(readline());
     var roundType = parseInt(readline()); // a positive value will show the number of heroes that await a command
     
@@ -148,8 +224,7 @@ while( true ){
 		print('IRONMAN');
 	}
 	// Normal round
-	else {
-		printErr('Enemy front: ' + _battleFront);
+	else {		
 		switch( _myHero.heroType ){
 			case 'DEADPOOL':
 				deadpool();
@@ -189,11 +264,58 @@ function hulk(){
 }
 
 function ironman(){
+	// Compute next items to buy and sell
+	var nextItem, nextToSell;
+	var rank = 0;
+	while( nextItem === undefined ){
+		if( _myItems.boots < rank ){
+			nextItem = _boots[rank];
+			nextItem.type = 'boots';
+			if( _myItems.boots >= 0 ){
+				nextToSell = _boots[_myItems.boots].name;
+			}
+		}
+		else if( _myItems.weapon < rank ){
+			nextItem = _weapons[rank];
+			nextItem.type = 'weapon';
+			if( _myItems.weapon >= 0 ){
+				nextToSell = _weapons[_myItems.weapon].name;
+			}
+		}
+		else if( _myItems.gadget < rank ){
+			nextItem = _gadgets[rank];
+			nextItem.type = 'gadget';
+			if( _myItems.gadget >= 0 ){
+				nextToSell = _gadgets[_myItems.gadget].name;
+			}
+		}
+		rank++;
+	}
+	
+	// Buy health potion if needed
+	if( _myHero.health < _myHero.maxHealth * HEALTH_POTIONS_RATIO 
+			&& _gold >= _potions.health[0].cost ){
+		buy( _potions.health[0].name );
+	}
 	// If my hero is too weak or enemy hero too close: back to my tower
-	if( _myHero.health < _myHero.maxHealth / 4 || atRange( _myHero, _enemyHero ) ){
+	else if( _myHero.health < _myHero.maxHealth * HEALTH_BACK_RATIO 
+			|| atRange( _myHero, _enemyHero ) ){
 		move( _myTower.x, _myTower.y );
 	}
-	// If my hero has move too much forward: back
+	// Sell items
+	else if( _itemsToSell.length > 0 ){
+		sell( _itemsToSell[0] );
+		_itemsToSell.shift();
+	}
+	// Buy items
+	else if( _availableGold >= nextItem.cost ){
+		buy( nextItem.name );
+		_myItems[nextItem.type] = nextItem.rank;
+		if( nextToSell ){
+			_itemsToSell.push( nextToSell );
+		}
+	}
+	// Move the hero in battle position: just behind the front line
 	else if( ( _mySide === 'left' && _myHero.x !== _battleFront - 100 )
 			|| ( _mySide === 'right' && _myHero.x !== _battleFront + 100 ) ){
 		if( _mySide === 'left' ){
@@ -231,12 +353,20 @@ function attackNearest( unitType ){
 	print('ATTACK_NEAREST ' + unitType);
 }
 
+function buy( itemName ){
+	print('BUY ' + itemName);
+}
+
 function move( x, y ){
 	print('MOVE ' + x + ' ' + y);
 }
 
 function moveAttack( x, y, unitId ){
 	print('MOVE_ATTACK ' + x + ' ' + y + ' ' + unitId);
+}
+
+function sell( itemName ){
+	print('SELL ' + itemName);
 }
 
 function wait(){
@@ -251,4 +381,14 @@ function atRange( entity, from ){
 
 function distance( e1, e2 ){
 	return Math.sqrt( Math.pow( e2.x - e1.x, 2 ) + Math.pow( e2.y - e1.y, 2 ) );
+}
+
+function sortByCostAsc( a, b ){
+	return a.cost - b.cost;
+}
+
+// Debug functions
+
+function stringify( object ){
+	return JSON.stringify( object, null, 2 );
 }
