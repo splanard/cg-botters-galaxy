@@ -95,11 +95,11 @@ for( var i=0; i < _weapons.length; i++ ){
 	_weapons[i].rank = i;
 }
 
-printErr( 'POTIONS: ' + stringify( _potions ) );
-printErr( 'BOOTS: ' + stringify( _boots ) );
-printErr( 'GADGETS: ' + stringify( _gadgets ) );
-printErr( 'WEAPONS: ' + stringify( _weapons ) );
-printErr( stringify( _items ) );
+//printErr( 'POTIONS: ' + stringify( _potions ) );
+//printErr( 'BOOTS: ' + stringify( _boots ) );
+//printErr( 'GADGETS: ' + stringify( _gadgets ) );
+//printErr( 'WEAPONS: ' + stringify( _weapons ) );
+//printErr( stringify( _items ) );
 
 // game loop
 var _myItems = {
@@ -218,6 +218,11 @@ while( true ){
 			
 		}
     }
+	
+	// Sort units at range by asc health
+	_units.atHeroRange.sort( function(a, b){
+		return _units[a].health - _units[b].health;
+	});
 	
 	// Hero selection
 	if( roundType < 0 ){
