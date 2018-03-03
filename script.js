@@ -330,8 +330,7 @@ function laneRange( heroIdx ){
 	}
 	// If my hero is too weak or enemy hero too close: back to my tower
 	else if( hero.health < hero.maxHealth * HEALTH_BACK_RATIO 
-			|| atRange( hero, _enemyHeroes[0] )
-			|| atRange( hero, _enemyHeroes[1] ) ){
+			|| hero.enemyHeroesAtRange.length > 0 ){
 		back();
 	}
 	// Sell items
