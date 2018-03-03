@@ -223,11 +223,11 @@ while( true ){
 				for( var hid=0; hid < _myHeroes.length; hid++ ){
 					var hero = _myHeroes[hid];
 					// unit at range of my hero
-					if( atRange( u, hero ) ){
+					if( isAtRange( u, hero ) ){
 						hero.enemyUnitsAtRange.push( u.id );
 					}
 					// unit threatening my hero
-					if( atRange( hero, u ) ){
+					if( isAtRange( hero, u ) ){
 						hero.threateningUnits.push( u.id );
 					}
 					// unit which can aggro my hero
@@ -240,15 +240,31 @@ while( true ){
     }
 	
 	// Normal round
-	if( roundType >= 0 ){		
-		// Sort enemy units at range by asc health
-		_myHeroes[0].enemyUnitsAtRange.sort( sortByHealthAsc );
-		_myHeroes[0].enemyHeroesAtRange.sort( sortByHealthAsc );
-		_myHeroes[1].enemyUnitsAtRange.sort( sortByHealthAsc );
-		_myHeroes[1].enemyHeroesAtRange.sort( sortByHealthAsc );
+	if( roundType >= 0 ){
+		for( var i=0; i < _myHeroes.length; i++ ){
+			// Compute enemy heroes at range
+			for( var j=0; j < _enemyHeroes.length; j++ ){
+				// Enemy hero is at mines's attack range
+				if( isAtRange( _enemyHeroes[j], _myHeroes[i], true ) ){
+					_myHeroes[i].enemyHeroesAtRange.push( j );
+				}
+				// Enemy hero is threatening mine
+				if( willBeAtRange( _myHeroes[i], _enemyHeroes[j], true ) ){
+					_myHeroes[i].threateningHeroes.push( j );
+				}
+			}
+			
+			// Sort potential targets by asc health
+			_myHeroes[i].enemyUnitsAtRange.sort( sortByHealthAsc );
+			_myHeroes[i].enemyHeroesAtRange.sort( sortByHealthAsc );
+			
+			printErr( _myHeroes[i].heroType + ': ' + stringify( _myHeroes[i] ) );
+		}
 		
-		_roles[_myHeroes[0].heroType](0);
-		_roles[_myHeroes[1].heroType](1);
+		// Action
+		for( var i=0; i < _myHeroes.length; i++ ){
+			_roles[_myHeroes[i].heroType](i);
+		}
 	}
 	// Hero selection round
 	else {
@@ -330,7 +346,7 @@ function laneRange( heroIdx ){
 	}
 	// If my hero is too weak or enemy hero too close: back to my tower
 	else if( hero.health < hero.maxHealth * HEALTH_BACK_RATIO 
-			|| hero.enemyHeroesAtRange.length > 0 ){
+			|| hero.threateningHeroes.length > 0 ){
 		back();
 	}
 	// Sell items
@@ -408,8 +424,12 @@ function wait(){
 
 // Utility functions
 
-function atRange( entity, from ){
-	return distance( entity, from ) < from.attackRange;
+function isAtRange( entity, from ){
+	return distance( entity, from ) <= from.attackRange;
+}
+
+function willBeAtRange( entity, from ){
+	return distance( entity, from ) <= from.attackRange + from.movementSpeed;
 }
 
 function convertX( x ){
@@ -421,7 +441,7 @@ function convertX( x ){
 }
 
 function distance( e1, e2 ){
-	return Math.sqrt( Math.pow( e2.x - e1.x, 2 ) + Math.pow( e2.y - e1.y, 2 ) );
+	return Math.floor( Math.sqrt( Math.pow( e2.x - e1.x, 2 ) + Math.pow( e2.y - e1.y, 2 ) ) );
 }
 
 function sortByCostAsc( a, b ){
