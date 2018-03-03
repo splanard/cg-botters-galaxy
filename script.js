@@ -324,7 +324,7 @@ function ironman(){
 	// If my hero is too weak or enemy hero too close: back to my tower
 	else if( _myHero.health < _myHero.maxHealth * HEALTH_BACK_RATIO 
 			|| atRange( _myHero, _enemyHero ) ){
-		move( _myTower.x, _myTower.y );
+		back();
 	}
 	// Sell items
 	else if( _itemsToSell.length > 0 ){
@@ -372,12 +372,21 @@ function attackNearest( unitType ){
 	print('ATTACK_NEAREST ' + unitType);
 }
 
+function back(){
+	move( _myTower.x, _myTower.y, 'Back!' );
+}
+
 function buy( itemName ){
 	print('BUY ' + itemName);
 }
 
-function move( x, y ){
-	print('MOVE ' + x + ' ' + y);
+function move( x, y, msg ){
+	if( msg ){
+		print('MOVE ' + x + ' ' + y + ';' + msg);
+	}
+	else {
+		print('MOVE ' + x + ' ' + y);
+	}
 }
 
 function moveAttack( x, y, unitId ){
