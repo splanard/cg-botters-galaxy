@@ -1,6 +1,4 @@
 /* TODO:
- * - Implement second hero
- * - Convert {x,y} so I'm virtually always on the left...
  * - Refactor all the items management code...
  * - Change the health backing ratio if no health potions available !
  * - Change the potion buying algorithm (buy the more rentable on to cover health loss)
@@ -18,18 +16,20 @@ var MAX_ITEMS = 4;
 
 var _myTeam = parseInt(readline());
 
+// BUSHES INPUT
 var _bushes = [];
 var bushAndSpawnPointCount = parseInt(readline()); // usefrul from wood1, represents the number of bushes and the number of places where neutral units can spawn
 for( var i = 0; i < bushAndSpawnPointCount; i++ ){
     var inputs = readline().split(' ');
 	_bushes.push({
 		'type': inputs[0], // BUSH, from wood1 it can also be SPAWN
-		'x': parseInt(inputs[1]),
+		'xo': parseInt(inputs[1]),
 		'y': parseInt(inputs[2]),
 		'radius': parseInt(inputs[3])
 	});
 }
 
+// ITEMS INPUT
 var _boots = [];
 var _gadgets = [];
 var _potions = {
@@ -111,25 +111,27 @@ for( var i=0; i < _weapons.length; i++ ){
 //printErr( 'WEAPONS: ' + stringify( _weapons ) );
 //printErr( stringify( _items ) );
 
+
+// GAME LOOP
 var _round = -2;
-var _myItems = {};
-var _itemsToSell = {};
-var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _battleFront;
+var _myItems = {}; // TODO: refactor
+var _itemsToSell = {}; // TODO: refactor
+var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _myFront, _enemyFront;
 var _roles = {};
-// game loop
 while( true ){
-    _gold = parseInt(readline());
+    // Gold input
+	_gold = parseInt(readline());
 	_availableGold = _gold - _potions.health[0].cost;
     var enemyGold = parseInt(readline());
-    var roundType = parseInt(readline()); // a positive value will show the number of heroes that await a command
     
-	// Init enemy front coordinate
-	if( _mySide === 'left' ){
-		_battleFront = 100;
-	} else {
-		_battleFront = 1820;
-	}
+	// Round type
+	var roundType = parseInt(readline()); // a positive value will show the number of heroes that await a command
+    
+	// Init battle fronts coordinates
+	_myFront = 100;
+	_enemyFront = 1820;
 	
+	// Units input
 	_units = {};
 	_myHeroes = [];
 	_enemyHeroes = [];
@@ -140,7 +142,8 @@ while( true ){
 			'id': parseInt(inputs[0]),
 			'team': parseInt(inputs[1]),
 			'unitType': inputs[2], // UNIT, HERO, TOWER, can also be GROOT from wood1
-			'x': parseInt(inputs[3]),
+			'x': convertX( parseInt(inputs[3]) ),
+			'xo': parseInt(inputs[3]),
 			'y': parseInt(inputs[4]),
 			'attackRange': parseInt(inputs[5]),
 			'health': parseInt(inputs[6]),
@@ -154,9 +157,20 @@ while( true ){
 		
 		u.isRanged = (u.attackRange > 150);
 		
+		// Towers
+		if( u.unitType === 'TOWER' ){
+			// My tower
+			if( u.team === _myTeam ){
+				_myTower = u;
+			}
+			// Enemy tower
+			else {
+				_enemyTower = u;
+			}
+		}
+		
 		// Heroes
-		if( u.unitType === 'HERO' ){
-			printErr('HERO input ' + u.id);
+		else if( u.unitType === 'HERO' ){
 			u.countDown1 = parseInt(inputs[13]); // all countDown and mana variables are useful starting in bronze
 			u.countDown2 = parseInt(inputs[14]);
 			u.countDown3 = parseInt(inputs[15]);
@@ -183,36 +197,15 @@ while( true ){
 			}
 		}
 		
-		// Towers
-		else if( u.unitType === 'TOWER' ){
-			printErr('TOWER input ' + u.id);
-			// My tower
-			if( u.team === _myTeam ){
-				_myTower = u;
-				
-				if( _myTower.x === 100 ){
-					_mySide = 'left';
-				} else {
-					_mySide = 'right';
-				}
-			}
-			// Enemy tower
-			else {
-				_enemyTower = u;
-			}
-		}
-		
 		// Units
 		else if( u.unitType === 'UNIT' ){
-			printErr('UNIT input ' + u.id);
 			_units[u.id] = u;
 			
 			// Ally units...
 			if( u.team === _myTeam ){ 
 				// Battle front
-				if( ( _mySide === 'left' && u.x > _battleFront ) 
-						|| ( _mySide === 'right' && u.x < _battleFront ) ){
-					_battleFront = u.x;
+				if( u.x > _myFront ){
+					_myFront = u.x;
 				}
 			}
 			// Neutral units...
@@ -221,17 +214,23 @@ while( true ){
 			}
 			// Enemy units...
 			else {
+				// Battle front
+				if( u.x < _enemyFront ){
+					_enemyFront = u.x;
+				}
+				
+				// Interactions with my heroes
 				for( var hid=0; hid < _myHeroes.length; hid++ ){
 					var hero = _myHeroes[hid];
-					// ... at range of my hero
+					// unit at range of my hero
 					if( atRange( u, hero ) ){
 						hero.enemyUnitsAtRange.push( u.id );
 					}
-					// ... threatening my hero
+					// unit threatening my hero
 					if( atRange( hero, u ) ){
 						hero.threateningUnits.push( u.id );
 					}
-					// .. which can aggro my hero
+					// unit which can aggro my hero
 					if( distance( hero, u ) <= AGGRO_DISTANCE ){
 						hero.enemyUnitsCanAggro.push( u.id );
 					}
@@ -241,7 +240,7 @@ while( true ){
     }
 	
 	// Normal round
-	if( roundType >= 0 ){
+	if( roundType >= 0 ){		
 		// Sort enemy units at range by asc health
 		_myHeroes[0].enemyUnitsAtRange.sort( sortByHealthAsc );
 		_myHeroes[0].enemyHeroesAtRange.sort( sortByHealthAsc );
@@ -251,8 +250,9 @@ while( true ){
 		_roles[_myHeroes[0].heroType](0);
 		_roles[_myHeroes[1].heroType](1);
 	}
-	// Hero selection
+	// Hero selection round
 	else {
+		// Hero selection
 		var hero;
 		if( _round === -2 ){
 			hero = 'IRONMAN';
@@ -263,12 +263,22 @@ while( true ){
 			_roles[hero] = laneRange;
 		}
 		print( hero );
+		
+		// Items init (TODO: refactor)
 		_myItems[hero] = {
 			'boots': -1,
 			'gadget': -1,
 			'weapon': -1
 		};
 		_itemsToSell[hero] = [];
+		
+		// Compute side
+		if( !_mySide &&_myTower.x === 100 ){
+			_mySide = 'LEFT';
+		}
+		else if( !_mySide ){
+			_mySide = 'RIGHT';
+		}
 	}
 	
 	_round++;
@@ -309,14 +319,9 @@ function laneRange( heroIdx ){
 	
 	// Battle position
 	var battlePosition = {
+		'x': _myFront - DISTANCE_FROM_BATTLE_FRONT,
 		'y': _enemyTower.y
 	};
-	if( _mySide === 'left' ){
-		battlePosition.x = _battleFront - DISTANCE_FROM_BATTLE_FRONT;
-	}
-	else {
-		battlePosition.x = _battleFront + DISTANCE_FROM_BATTLE_FRONT;
-	}
 	
 	// Buy health potion if needed
 	if( hero.health < hero.maxHealth * HEALTH_BACK_RATIO 
@@ -383,15 +388,15 @@ function buy( itemName ){
 
 function move( x, y, msg ){
 	if( msg ){
-		print('MOVE ' + x + ' ' + y + ';' + msg);
+		print('MOVE ' + convertX(x) + ' ' + y + ';' + msg);
 	}
 	else {
-		print('MOVE ' + x + ' ' + y);
+		print('MOVE ' + convertX(x) + ' ' + y);
 	}
 }
 
 function moveAttack( x, y, unitId ){
-	print('MOVE_ATTACK ' + x + ' ' + y + ' ' + unitId);
+	print('MOVE_ATTACK ' + convertX(x) + ' ' + y + ' ' + unitId);
 }
 
 function sell( itemName ){
@@ -406,6 +411,14 @@ function wait(){
 
 function atRange( entity, from ){
 	return distance( entity, from ) < from.attackRange;
+}
+
+function convertX( x ){
+	if( _mySide === 'RIGHT' ){
+		return 1920 - x;
+	} else {
+		return x;
+	}
 }
 
 function distance( e1, e2 ){
