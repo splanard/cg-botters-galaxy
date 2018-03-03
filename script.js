@@ -1,7 +1,14 @@
+/* TODO:
+ * - Implement second hero
+ * - Change the health backing ratio if no health potions available !
+ * - Change the potion buying algorithm (buy the more rentable on to cover health loss)
+ * - Improve attack to gain more last hits
+ * - Implement deny
+ */
+
 // Conf
 var DISTANCE_FROM_BATTLE_FRONT = 100;
-var HEALTH_POTIONS_RATIO = 0.20;
-var HEALTH_BACK_RATIO = 0.25;
+var HEALTH_BACK_RATIO = 0.20;
 
 // Const
 var AGGRO_DISTANCE = 300;
@@ -310,7 +317,7 @@ function ironman(){
 	}
 	
 	// Buy health potion if needed
-	if( _myHero.health < _myHero.maxHealth * HEALTH_POTIONS_RATIO 
+	if( _myHero.health < _myHero.maxHealth * HEALTH_BACK_RATIO 
 			&& _gold >= _potions.health[0].cost ){
 		buy( _potions.health[0].name );
 	}
@@ -332,8 +339,9 @@ function ironman(){
 			_itemsToSell.push( nextToSell );
 		}
 	}
-	// Move the hero in battle position: just behind the front line
-	else if( distance( _myHero, battlePosition ) > 50 ){
+	// Move the hero in battle position: just behind the front line but far enough from the enemy tower
+	else if( distance( _myHero, battlePosition ) > 50 
+			&& distance( battlePosition, _enemyTower ) > _enemyTower.attackRange ){
 		move( battlePosition.x, battlePosition.y );
 	}
 	// Enemy hero at range and no units can aggro: attack
