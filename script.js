@@ -1,4 +1,5 @@
 // Conf
+var DISTANCE_FROM_BATTLE_FRONT = 100;
 var HEALTH_POTIONS_RATIO = 0.20;
 var HEALTH_BACK_RATIO = 0.25;
 
@@ -297,6 +298,17 @@ function ironman(){
 		rank++;
 	}
 	
+	// Battle position
+	var battlePosition = {
+		'y': _enemyTower.y
+	};
+	if( _mySide === 'left' ){
+		battlePosition.x = _battleFront - DISTANCE_FROM_BATTLE_FRONT;
+	}
+	else {
+		battlePosition.x = _battleFront + DISTANCE_FROM_BATTLE_FRONT;
+	}
+	
 	// Buy health potion if needed
 	if( _myHero.health < _myHero.maxHealth * HEALTH_POTIONS_RATIO 
 			&& _gold >= _potions.health[0].cost ){
@@ -321,14 +333,8 @@ function ironman(){
 		}
 	}
 	// Move the hero in battle position: just behind the front line
-	else if( ( _mySide === 'left' && _myHero.x !== _battleFront - 100 )
-			|| ( _mySide === 'right' && _myHero.x !== _battleFront + 100 ) ){
-		if( _mySide === 'left' ){
-			move( _battleFront - 100, _enemyTower.y );
-		}
-		else {
-			move( _battleFront + 100, _enemyTower.y );
-		}
+	else if( distance( _myHero, battlePosition ) > 50 ){
+		move( battlePosition.x, battlePosition.y );
 	}
 	// Enemy hero at range and no units can aggro: attack
 	else if( atRange( _enemyHero, _myHero ) && _units.canAggroHero.length === 0 ){
