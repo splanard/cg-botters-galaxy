@@ -26,14 +26,17 @@ for( var i = 0; i < bushAndSpawnPointCount; i++ ){
 }
 
 // ITEMS INPUT
-var _boots = [];
-var _gadgets = [];
+var itemSets = {
+	'laneRange': []
+};
 var _potions = {
 	'health': [],
 	'mana': []
 };
+var _boots = [];
+var _gadgets = [];
 var _weapons = [];
-var _items = [];
+var _items = {};
 var itemCount = parseInt(readline()); // useful from wood2
 for( var i = 0; i < itemCount; i++ ){
     var inputs = readline().split(' ');
@@ -58,9 +61,6 @@ for( var i = 0; i < itemCount; i++ ){
 		else if( item.mana > 0 ){
 			_potions.mana.push( item );
 		}
-		else {
-			_items.push( item );
-		}
 	}
 	
 	// Boots
@@ -76,9 +76,7 @@ for( var i = 0; i < itemCount; i++ ){
 		_weapons.push( item );
 	}
 	
-	else {
-		_items.push( item );
-	}
+	_items[item.name] = item;
 }
 
 // Sort potions
@@ -188,9 +186,6 @@ while( true ){
 				u.enemyUnitsCanAggro = []; // IDs of all the enemy units which can aggro my hero
 				
 				u.underAttack = ( u.health < _myHeroesPrevious[_myHeroes.length].health );
-				if( u.underAttack ){
-					printErr( 'Hero ' + u.id + ' under attack !' );
-				}
 				
 				_myHeroes.push(u);
 			}
@@ -249,13 +244,14 @@ while( true ){
 		for( var i=0; i < _myHeroes.length; i++ ){
 			// Compute enemy heroes at range
 			for( var j=0; j < _enemyHeroes.length; j++ ){
+				var eh = _enemyHeroes[j];
 				// Enemy hero is at mines's attack range
-				if( isAtRange( _enemyHeroes[j], _myHeroes[i] ) ){
-					_myHeroes[i].enemyHeroesAtRange.push( j );
+				if( isAtRange( eh, _myHeroes[i] ) ){
+					_myHeroes[i].enemyHeroesAtRange.push( eh.id );
 				}
 				// Enemy hero is threatening mine
-				if( willBeAtRange( _myHeroes[i], _enemyHeroes[j] ) ){
-					_myHeroes[i].threateningHeroes.push( j );
+				if( willBeAtRange( _myHeroes[i], eh ) ){
+					_myHeroes[i].threateningHeroes.push( eh.id );
 				}
 			}
 			
@@ -311,8 +307,13 @@ while( true ){
 function laneRange( heroIdx ){
 	var hero = _myHeroes[heroIdx];
 	
+	printErr( hero.heroType );
+	printErr( 'enemyHeroesAtRange : ' + hero.enemyHeroesAtRange );
+	printErr( 'enemyUnitsAtRange : ' + hero.enemyUnitsAtRange );
+	
 	// Role conf
 	var HEALTH_RATIO_BACK = 0.4;
+	var HEALTH_RATIO_POTION = 0.25;
 	var MIN_DISTANCE_FROM_MY_FRONT = 100;
 	
 	// Compute next items to buy and sell
@@ -349,21 +350,38 @@ function laneRange( heroIdx ){
 		'y': _enemyTower.y
 	};
 	
+	// ---
 	// Buy health potion if needed
-	if( hero.health < hero.maxHealth * HEALTH_RATIO_BACK 
+	if( hero.health < hero.maxHealth * HEALTH_RATIO_POTION 
 			&& _gold >= _potions.health[0].cost ){
 		buy( _potions.health[0].name );
 	}
-	/*
-	// If my hero is too weak or enemy hero too close: back to my tower
-	else if( hero.health < hero.maxHealth * HEALTH_BACK_RATIO 
-			|| hero.threateningHeroes.length > 0 ){
-		back();
-	}
-	*/
-    // If my hero is too weak or under attack: fall back
+	// ---
+    // If my hero is weak or under attack: fall back if possible or fight.
 	else if( hero.health < hero.maxHealth * HEALTH_RATIO_BACK || hero.underAttack ){
-		back();
+		// My hero is already at the tower...
+		if( hero.x <= _myTower.x ){
+			// Enemy heroes at range and not too much enemy units around: attack hero
+			if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length < 2 ){
+				attack( hero.enemyHeroesAtRange[0] );
+			}
+			// Enemy units at range: attack them
+			else if( hero.enemyUnitsAtRange.length > 0 ){
+				attack( hero.enemyUnitsAtRange[0] );
+			}
+			// No enemies at range: if not under attack, move a bit ahead...
+			else if( !hero.underAttack && hero.threateningHeroes.length === 0 ){
+				move( battlePosition.x, battlePosition.y );
+			}
+			// Under attack: try to move a bit further away
+			else {
+				move( 0, _myTower.y );
+			}
+		}
+		// Back to the tower !
+		else {
+			back();
+		}
 	}
 	// Sell items
 	else if( _itemsToSell[hero.heroType].length > 0 ){
