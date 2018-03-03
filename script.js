@@ -6,10 +6,6 @@
  * - Implement deny
  */
 
-// Conf
-var DISTANCE_FROM_BATTLE_FRONT = 100;
-var HEALTH_BACK_RATIO = 0.20;
-
 // Const
 var AGGRO_DISTANCE = 300;
 var MAX_ITEMS = 4;
@@ -116,8 +112,9 @@ for( var i=0; i < _weapons.length; i++ ){
 var _round = -2;
 var _myItems = {}; // TODO: refactor
 var _itemsToSell = {}; // TODO: refactor
-var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _myFront, _enemyFront;
 var _roles = {};
+var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _myFront, _enemyFront;
+var _myHeroesPrevious = [{ 'health': 0 }, { 'health': 0 }];
 while( true ){
     // Gold input
 	_gold = parseInt(readline());
@@ -155,7 +152,7 @@ while( true ){
 			'goldValue': parseInt(inputs[12])
 		};
 		
-		u.isRanged = (u.attackRange > 150);
+		u.isRanged = (u.attackRange >= 150);
 		
 		// Towers
 		if( u.unitType === 'TOWER' ){
@@ -179,7 +176,8 @@ while( true ){
 			u.manaRegeneration = parseInt(inputs[18]);
 			u.heroType = inputs[19]; // DEADPOOL, VALKYRIE, DOCTOR_STRANGE, HULK, IRONMAN
 			u.isVisible = parseInt(inputs[20]) > 0; // 0 if it isn't
-			u.itemsOwned = parseInt(inputs[21]); // useful from wood1		
+			u.itemsOwned = parseInt(inputs[21]); // useful from wood1
+			u.attackSpeed = 0.1;
 			
 			// My hero
 			if( u.team === _myTeam ){
@@ -188,6 +186,11 @@ while( true ){
 				u.threateningUnits = []; // IDs of all enemy units from which my hero is at range
 				u.threateningHeroes = []; //IDs of all enemy heroes from which my hero is at range
 				u.enemyUnitsCanAggro = []; // IDs of all the enemy units which can aggro my hero
+				
+				u.underAttack = ( u.health < _myHeroesPrevious[_myHeroes.length].health );
+				if( u.underAttack ){
+					printErr( 'Hero ' + u.id + ' under attack !' );
+				}
 				
 				_myHeroes.push(u);
 			}
@@ -199,7 +202,7 @@ while( true ){
 		
 		// Units
 		else if( u.unitType === 'UNIT' ){
-			_units[u.id] = u;
+			u.attackSpeed = 0.2;			
 			
 			// Ally units...
 			if( u.team === _myTeam ){ 
@@ -236,6 +239,8 @@ while( true ){
 					}
 				}
 			}
+			
+			_units[u.id] = u;
 		}
     }
 	
@@ -245,11 +250,11 @@ while( true ){
 			// Compute enemy heroes at range
 			for( var j=0; j < _enemyHeroes.length; j++ ){
 				// Enemy hero is at mines's attack range
-				if( isAtRange( _enemyHeroes[j], _myHeroes[i], true ) ){
+				if( isAtRange( _enemyHeroes[j], _myHeroes[i] ) ){
 					_myHeroes[i].enemyHeroesAtRange.push( j );
 				}
 				// Enemy hero is threatening mine
-				if( willBeAtRange( _myHeroes[i], _enemyHeroes[j], true ) ){
+				if( willBeAtRange( _myHeroes[i], _enemyHeroes[j] ) ){
 					_myHeroes[i].threateningHeroes.push( j );
 				}
 			}
@@ -257,14 +262,15 @@ while( true ){
 			// Sort potential targets by asc health
 			_myHeroes[i].enemyUnitsAtRange.sort( sortByHealthAsc );
 			_myHeroes[i].enemyHeroesAtRange.sort( sortByHealthAsc );
-			
-			printErr( _myHeroes[i].heroType + ': ' + stringify( _myHeroes[i] ) );
 		}
 		
 		// Action
 		for( var i=0; i < _myHeroes.length; i++ ){
 			_roles[_myHeroes[i].heroType](i);
 		}
+		
+		// Keep previous run state
+		_myHeroesPrevious = _myHeroes.slice();
 	}
 	// Hero selection round
 	else {
@@ -305,6 +311,10 @@ while( true ){
 function laneRange( heroIdx ){
 	var hero = _myHeroes[heroIdx];
 	
+	// Role conf
+	var HEALTH_RATIO_BACK = 0.4;
+	var MIN_DISTANCE_FROM_MY_FRONT = 100;
+	
 	// Compute next items to buy and sell
 	var nextItem, nextToSell;
 	var rank = 0;
@@ -335,18 +345,24 @@ function laneRange( heroIdx ){
 	
 	// Battle position
 	var battlePosition = {
-		'x': _myFront - DISTANCE_FROM_BATTLE_FRONT,
+		'x': Math.max( _myTower.x, Math.min( _myFront - MIN_DISTANCE_FROM_MY_FRONT, _enemyFront - hero.attackRange ) ),
 		'y': _enemyTower.y
 	};
 	
 	// Buy health potion if needed
-	if( hero.health < hero.maxHealth * HEALTH_BACK_RATIO 
+	if( hero.health < hero.maxHealth * HEALTH_RATIO_BACK 
 			&& _gold >= _potions.health[0].cost ){
 		buy( _potions.health[0].name );
 	}
+	/*
 	// If my hero is too weak or enemy hero too close: back to my tower
 	else if( hero.health < hero.maxHealth * HEALTH_BACK_RATIO 
 			|| hero.threateningHeroes.length > 0 ){
+		back();
+	}
+	*/
+    // If my hero is too weak or under attack: fall back
+	else if( hero.health < hero.maxHealth * HEALTH_RATIO_BACK || hero.underAttack ){
 		back();
 	}
 	// Sell items
@@ -386,7 +402,7 @@ function laneRange( heroIdx ){
 // Action functions
 
 function attack( unitId ){
-	print('ATTACK ' + unitId);
+	print('ATTACK ' + unitId + ';Attack');
 }
 
 function attackNearest( unitType ){
@@ -429,7 +445,13 @@ function isAtRange( entity, from ){
 }
 
 function willBeAtRange( entity, from ){
-	return distance( entity, from ) <= from.attackRange + from.movementSpeed;
+	var dangerDistance;
+	if( from.isRanged ){
+		dangerDistance = from.attackRange + from.movementSpeed * (1 - 2 * from.attackSpeed);
+	} else {
+		dangerDistance = from.attackRange + from.movementSpeed * (1 - from.attackSpeed);
+	}
+	return distance( entity, from ) <= dangerDistance;
 }
 
 function convertX( x ){
