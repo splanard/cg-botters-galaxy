@@ -26,16 +26,13 @@ for( var i = 0; i < bushAndSpawnPointCount; i++ ){
 }
 
 // ITEMS INPUT
-var itemSets = {
+var _itemSets = {
 	'laneRange': []
 };
 var _potions = {
 	'health': [],
 	'mana': []
 };
-var _boots = [];
-var _gadgets = [];
-var _weapons = [];
 var _items = {};
 var itemCount = parseInt(readline()); // useful from wood2
 for( var i = 0; i < itemCount; i++ ){
@@ -63,17 +60,9 @@ for( var i = 0; i < itemCount; i++ ){
 		}
 	}
 	
-	// Boots
-	else if( item.name.includes( 'Boots' ) ){
-		_boots.push( item );
-	}
-	// Gadgets
-	else if( item.name.includes( 'Gadget' ) ){
-		_gadgets.push( item );
-	}
-	// Weapons
-	else if( item.name.includes( 'Blade' ) ){
-		_weapons.push( item );
+	// LaneRange role need moveSpeed and damage
+	if( item.damage > 0 || item.moveSpeed > 0 ){
+		_itemSets.laneRange.push( item.name );
 	}
 	
 	_items[item.name] = item;
@@ -83,33 +72,14 @@ for( var i = 0; i < itemCount; i++ ){
 _potions.health.sort( function(a, b){ return a.health - b.health; } );
 _potions.mana.sort( function(a, b){ return a.mana - b.mana; } );
 
-// Sort items
-_boots.sort( sortByCostAsc );
-_gadgets.sort( sortByCostAsc );
-_weapons.sort( sortByCostAsc );
+// Sort item sets by asc cost
+_itemSets.laneRange.sort( sortItemsByCostAsc );
 
-// Giving ranks to items
-for( var i=0; i < _boots.length; i++ ){
-	_boots[i].rank = i;
-}
-for( var i=0; i < _gadgets.length; i++ ){
-	_gadgets[i].rank = i;
-}
-for( var i=0; i < _weapons.length; i++ ){
-	_weapons[i].rank = i;
-}
-
-//printErr( 'POTIONS: ' + stringify( _potions ) );
-//printErr( 'BOOTS: ' + stringify( _boots ) );
-//printErr( 'GADGETS: ' + stringify( _gadgets ) );
-//printErr( 'WEAPONS: ' + stringify( _weapons ) );
 //printErr( stringify( _items ) );
-
 
 // GAME LOOP
 var _round = -2;
-var _myItems = {}; // TODO: refactor
-var _itemsToSell = {}; // TODO: refactor
+var _myItems = {};
 var _roles = {};
 var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _myFront, _enemyFront;
 var _myHeroesPrevious = [{ 'health': 0 }, { 'health': 0 }];
@@ -172,7 +142,7 @@ while( true ){
 			u.mana = parseInt(inputs[16]);
 			u.maxMana = parseInt(inputs[17]);
 			u.manaRegeneration = parseInt(inputs[18]);
-			u.heroType = inputs[19]; // DEADPOOL, VALKYRIE, DOCTOR_STRANGE, HULK, IRONMAN
+			u.name = inputs[19]; // DEADPOOL, VALKYRIE, DOCTOR_STRANGE, HULK, IRONMAN
 			u.isVisible = parseInt(inputs[20]) > 0; // 0 if it isn't
 			u.itemsOwned = parseInt(inputs[21]); // useful from wood1
 			u.attackSpeed = 0.1;
@@ -262,7 +232,7 @@ while( true ){
 		
 		// Action
 		for( var i=0; i < _myHeroes.length; i++ ){
-			_roles[_myHeroes[i].heroType](i);
+			_roles[_myHeroes[i].name](i);
 		}
 		
 		// Keep previous run state
@@ -282,13 +252,11 @@ while( true ){
 		}
 		print( hero );
 		
-		// Items init (TODO: refactor)
+		// Items init
 		_myItems[hero] = {
-			'boots': -1,
-			'gadget': -1,
-			'weapon': -1
+			'list': [],
+			'maxRank': -1
 		};
-		_itemsToSell[hero] = [];
 		
 		// Compute side
 		if( !_mySide &&_myTower.x === 100 ){
@@ -306,43 +274,16 @@ while( true ){
 
 function laneRange( heroIdx ){
 	var hero = _myHeroes[heroIdx];
-	
-	printErr( hero.heroType );
-	printErr( 'enemyHeroesAtRange : ' + hero.enemyHeroesAtRange );
-	printErr( 'enemyUnitsAtRange : ' + hero.enemyUnitsAtRange );
+	//printErr( '> ' + hero.name );
 	
 	// Role conf
-	var HEALTH_RATIO_BACK = 0.4;
-	var HEALTH_RATIO_POTION = 0.25;
+	var HEALTH_RATIO_BACK = 0.5;
+	var HEALTH_RATIO_POTION = 0.3;
 	var MIN_DISTANCE_FROM_MY_FRONT = 100;
 	
-	// Compute next items to buy and sell
-	var nextItem, nextToSell;
-	var rank = 0;
-	while( nextItem === undefined ){
-		if( _myItems[hero.heroType].boots < rank ){
-			nextItem = _boots[rank];
-			nextItem.type = 'boots';
-			if( _myItems[hero.heroType].boots >= 0 ){
-				nextToSell = _boots[_myItems[hero.heroType].boots].name;
-			}
-		}
-		else if( _myItems[hero.heroType].weapon < rank ){
-			nextItem = _weapons[rank];
-			nextItem.type = 'weapon';
-			if( _myItems[hero.heroType].weapon >= 0 ){
-				nextToSell = _weapons[_myItems[hero.heroType].weapon].name;
-			}
-		}
-		else if( _myItems[hero.heroType].gadget < rank ){
-			nextItem = _gadgets[rank];
-			nextItem.type = 'gadget';
-			if( _myItems[hero.heroType].gadget >= 0 ){
-				nextToSell = _gadgets[_myItems[hero.heroType].gadget].name;
-			}
-		}
-		rank++;
-	}
+	// Next item to buy
+	var nextItem = _items[_itemSets.laneRange[_myItems[hero.name].maxRank + 1]];
+	//printErr( 'Next item to buy: ' + nextItem.name + '(' + nextItem.cost + ')' );
 	
 	// Battle position
 	var battlePosition = {
@@ -354,7 +295,7 @@ function laneRange( heroIdx ){
 	// Buy health potion if needed
 	if( hero.health < hero.maxHealth * HEALTH_RATIO_POTION 
 			&& _gold >= _potions.health[0].cost ){
-		buy( _potions.health[0].name );
+		buy( _potions.health[0] );
 	}
 	// ---
     // If my hero is weak or under attack: fall back if possible or fight.
@@ -383,20 +324,15 @@ function laneRange( heroIdx ){
 			back();
 		}
 	}
-	// Sell items
-	else if( _itemsToSell[hero.heroType].length > 0 ){
-		sell( _itemsToSell[hero.heroType][0] );
-		_itemsToSell[hero.heroType].shift();
+	// Full of items: sell the lesser one
+	else if( hero.itemsOwned === MAX_ITEMS ){
+		sell( _items[_myItems[hero.name].list.shift()] );
 	}
 	// Buy items
 	else if( _availableGold >= nextItem.cost ){
-		buy( nextItem.name );
-		_gold -= nextItem.cost;
-		_availableGold -= nextItem.cost;
-		_myItems[hero.heroType][nextItem.type] = nextItem.rank;
-		if( nextToSell ){
-			_itemsToSell[hero.heroType].push( nextToSell );
-		}
+		buy( nextItem );
+		_myItems[hero.name].list.push( nextItem.name );
+		_myItems[hero.name].maxRank++;
 	}
 	// Move the hero in battle position: just behind the front line but far enough from the enemy tower
 	else if( distance( hero, battlePosition ) > 50 
@@ -431,8 +367,9 @@ function back(){
 	move( _myTower.x, _myTower.y, 'Back!' );
 }
 
-function buy( itemName ){
-	print('BUY ' + itemName);
+function buy( item ){
+	print('BUY ' + item.name + ';+' + item.name);
+	changeGold( -item.cost );
 }
 
 function move( x, y, msg ){
@@ -448,8 +385,9 @@ function moveAttack( x, y, unitId ){
 	print('MOVE_ATTACK ' + convertX(x) + ' ' + y + ' ' + unitId);
 }
 
-function sell( itemName ){
-	print('SELL ' + itemName);
+function sell( item ){
+	print('SELL ' + item.name);
+	changeGold( item.cost );
 }
 
 function wait(){
@@ -472,6 +410,11 @@ function willBeAtRange( entity, from ){
 	return distance( entity, from ) <= dangerDistance;
 }
 
+function changeGold( delta ){
+	_gold += delta;
+	_availableGold = _gold - _potions.health[0].cost;
+}
+
 function convertX( x ){
 	if( _mySide === 'RIGHT' ){
 		return 1920 - x;
@@ -484,8 +427,8 @@ function distance( e1, e2 ){
 	return Math.floor( Math.sqrt( Math.pow( e2.x - e1.x, 2 ) + Math.pow( e2.y - e1.y, 2 ) ) );
 }
 
-function sortByCostAsc( a, b ){
-	return a.cost - b.cost;
+function sortItemsByCostAsc( a, b ){
+	return _items[a].cost - _items[b].cost;
 }
 
 function sortByHealthAsc( a, b ){
