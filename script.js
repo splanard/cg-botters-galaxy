@@ -1,5 +1,7 @@
 /* TODO:
  * - Implement second hero
+ * - Convert {x,y} so I'm virtually always on the left...
+ * - Refactor all the items management code...
  * - Change the health backing ratio if no health potions available !
  * - Change the potion buying algorithm (buy the more rentable on to cover health loss)
  * - Improve attack to gain more last hits
@@ -109,14 +111,12 @@ for( var i=0; i < _weapons.length; i++ ){
 //printErr( 'WEAPONS: ' + stringify( _weapons ) );
 //printErr( stringify( _items ) );
 
+var _round = -2;
+var _myItems = {};
+var _itemsToSell = {};
+var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _battleFront;
+var _roles = {};
 // game loop
-var _myItems = {
-	'boots': -1,
-	'gadget': -1,
-	'weapon': -1
-};
-var _itemsToSell = [];
-var _gold, _availableGold, _mySide, _myHero, _myTower, _enemyHero, _enemyTower, _units, _battleFront;
 while( true ){
     _gold = parseInt(readline());
 	_availableGold = _gold - _potions.health[0].cost;
@@ -130,12 +130,9 @@ while( true ){
 		_battleFront = 1820;
 	}
 	
-	_units = {
-		'all': [],
-		'atHeroRange': [],
-		'canAggroHero': [],
-		'threatenHero': []
-	};
+	_units = {};
+	_myHeroes = [];
+	_enemyHeroes = [];
 	var entityCount = parseInt(readline());
     for( var i = 0; i < entityCount; i++ ){
         var inputs = readline().split(' ');
@@ -155,8 +152,11 @@ while( true ){
 			'goldValue': parseInt(inputs[12])
 		};
 		
+		u.isRanged = (u.attackRange > 150);
+		
 		// Heroes
 		if( u.unitType === 'HERO' ){
+			printErr('HERO input ' + u.id);
 			u.countDown1 = parseInt(inputs[13]); // all countDown and mana variables are useful starting in bronze
 			u.countDown2 = parseInt(inputs[14]);
 			u.countDown3 = parseInt(inputs[15]);
@@ -164,21 +164,28 @@ while( true ){
 			u.maxMana = parseInt(inputs[17]);
 			u.manaRegeneration = parseInt(inputs[18]);
 			u.heroType = inputs[19]; // DEADPOOL, VALKYRIE, DOCTOR_STRANGE, HULK, IRONMAN
-			u.isVisible = parseInt(inputs[20]); // 0 if it isn't
-			u.itemsOwned = parseInt(inputs[21]); // useful from wood1
+			u.isVisible = parseInt(inputs[20]) > 0; // 0 if it isn't
+			u.itemsOwned = parseInt(inputs[21]); // useful from wood1		
 			
 			// My hero
 			if( u.team === _myTeam ){
-				_myHero = u;
+				u.enemyUnitsAtRange = []; // IDs of all enemy units at range
+				u.enemyHeroesAtRange = []; // IDs of all enemy heroes at range
+				u.threateningUnits = []; // IDs of all enemy units from which my hero is at range
+				u.threateningHeroes = []; //IDs of all enemy heroes from which my hero is at range
+				u.enemyUnitsCanAggro = []; // IDs of all the enemy units which can aggro my hero
+				
+				_myHeroes.push(u);
 			}
 			// Enemy hero
 			else {
-				_enemyHero = u;
+				_enemyHeroes.push(u);
 			}
 		}
 		
 		// Towers
 		else if( u.unitType === 'TOWER' ){
+			printErr('TOWER input ' + u.id);
 			// My tower
 			if( u.team === _myTeam ){
 				_myTower = u;
@@ -197,8 +204,8 @@ while( true ){
 		
 		// Units
 		else if( u.unitType === 'UNIT' ){
+			printErr('UNIT input ' + u.id);
 			_units[u.id] = u;
-			_units.all.push(u.id);
 			
 			// Ally units...
 			if( u.team === _myTeam ){ 
@@ -208,98 +215,93 @@ while( true ){
 					_battleFront = u.x;
 				}
 			}
+			// Neutral units...
+			else if( u.unitType === 'GROOT' ){
+				// TODO
+			}
 			// Enemy units...
 			else {
-				// ... at range of my hero
-				if( atRange( u, _myHero ) ){
-					_units.atHeroRange.push( u.id );
-				}
-				// ... threatening my hero
-				if( atRange( _myHero, u ) ){
-					_units.threatenHero.push( u.id );
-				}
-				// .. which can aggro my hero
-				if( distance( _myHero, u ) <= AGGRO_DISTANCE ){
-					_units.canAggroHero.push( u.id );
+				for( var hid=0; hid < _myHeroes.length; hid++ ){
+					var hero = _myHeroes[hid];
+					// ... at range of my hero
+					if( atRange( u, hero ) ){
+						hero.enemyUnitsAtRange.push( u.id );
+					}
+					// ... threatening my hero
+					if( atRange( hero, u ) ){
+						hero.threateningUnits.push( u.id );
+					}
+					// .. which can aggro my hero
+					if( distance( hero, u ) <= AGGRO_DISTANCE ){
+						hero.enemyUnitsCanAggro.push( u.id );
+					}
 				}
 			}
-			
 		}
     }
 	
-	// Sort units at range by asc health
-	_units.atHeroRange.sort( function(a, b){
-		return _units[a].health - _units[b].health;
-	});
-	
-	// Hero selection
-	if( roundType < 0 ){
-		print('IRONMAN');
-	}
 	// Normal round
-	else {		
-		switch( _myHero.heroType ){
-			case 'DEADPOOL':
-				deadpool();
-				break;
-			
-			case 'DOCTOR_STRANGE':
-				doctorStrange();
-				break;
-				
-			case 'HULK':
-				hulk();
-				break;
-			
-			case 'IRONMAN':
-				ironman();
-				break;
-				
-			case 'VALKYRIE':
-				valkyrie();
-				break;
-		}
+	if( roundType >= 0 ){
+		// Sort enemy units at range by asc health
+		_myHeroes[0].enemyUnitsAtRange.sort( sortByHealthAsc );
+		_myHeroes[0].enemyHeroesAtRange.sort( sortByHealthAsc );
+		_myHeroes[1].enemyUnitsAtRange.sort( sortByHealthAsc );
+		_myHeroes[1].enemyHeroesAtRange.sort( sortByHealthAsc );
+		
+		_roles[_myHeroes[0].heroType](0);
+		_roles[_myHeroes[1].heroType](1);
 	}
-}
-
-// Heroes function
-
-function deadpool(){
+	// Hero selection
+	else {
+		var hero;
+		if( _round === -2 ){
+			hero = 'IRONMAN';
+			_roles[hero] = laneRange;
+		}
+		else if( _round === -1 ){
+			hero = 'DOCTOR_STRANGE';
+			_roles[hero] = laneRange;
+		}
+		print( hero );
+		_myItems[hero] = {
+			'boots': -1,
+			'gadget': -1,
+			'weapon': -1
+		};
+		_itemsToSell[hero] = [];
+	}
 	
+	_round++;
 }
 
-function doctorStrange(){
+// Roles function
+
+function laneRange( heroIdx ){
+	var hero = _myHeroes[heroIdx];
 	
-}
-
-function hulk(){
-	
-}
-
-function ironman(){
 	// Compute next items to buy and sell
 	var nextItem, nextToSell;
 	var rank = 0;
 	while( nextItem === undefined ){
-		if( _myItems.boots < rank ){
+		if( _myItems[hero.heroType].boots < rank ){
 			nextItem = _boots[rank];
 			nextItem.type = 'boots';
-			if( _myItems.boots >= 0 ){
-				nextToSell = _boots[_myItems.boots].name;
+			if( _myItems[hero.heroType].boots >= 0 ){
+				nextToSell = _boots[_myItems[hero.heroType].boots].name;
 			}
 		}
-		else if( _myItems.weapon < rank ){
+		else if( _myItems[hero.heroType].weapon < rank ){
 			nextItem = _weapons[rank];
 			nextItem.type = 'weapon';
-			if( _myItems.weapon >= 0 ){
-				nextToSell = _weapons[_myItems.weapon].name;
+			if( _myItems[hero.heroType].weapon >= 0 ){
+				nextToSell = _weapons[_myItems[hero.heroType].weapon].name;
 			}
 		}
-		else if( _myItems.gadget < rank ){
+		else if( _myItems[hero.heroType].gadget < rank ){
 			nextItem = _gadgets[rank];
 			nextItem.type = 'gadget';
-			if( _myItems.gadget >= 0 ){
-				nextToSell = _gadgets[_myItems.gadget].name;
+			if( _myItems[hero.heroType].gadget >= 0 ){
+				nextToSell = _gadgets[_myItems[hero.heroType].gadget].name;
 			}
 		}
 		rank++;
@@ -317,49 +319,48 @@ function ironman(){
 	}
 	
 	// Buy health potion if needed
-	if( _myHero.health < _myHero.maxHealth * HEALTH_BACK_RATIO 
+	if( hero.health < hero.maxHealth * HEALTH_BACK_RATIO 
 			&& _gold >= _potions.health[0].cost ){
 		buy( _potions.health[0].name );
 	}
 	// If my hero is too weak or enemy hero too close: back to my tower
-	else if( _myHero.health < _myHero.maxHealth * HEALTH_BACK_RATIO 
-			|| atRange( _myHero, _enemyHero ) ){
+	else if( hero.health < hero.maxHealth * HEALTH_BACK_RATIO 
+			|| atRange( hero, _enemyHeroes[0] )
+			|| atRange( hero, _enemyHeroes[1] ) ){
 		back();
 	}
 	// Sell items
-	else if( _itemsToSell.length > 0 ){
-		sell( _itemsToSell[0] );
-		_itemsToSell.shift();
+	else if( _itemsToSell[hero.heroType].length > 0 ){
+		sell( _itemsToSell[hero.heroType][0] );
+		_itemsToSell[hero.heroType].shift();
 	}
 	// Buy items
 	else if( _availableGold >= nextItem.cost ){
 		buy( nextItem.name );
-		_myItems[nextItem.type] = nextItem.rank;
+		_gold -= nextItem.cost;
+		_availableGold -= nextItem.cost;
+		_myItems[hero.heroType][nextItem.type] = nextItem.rank;
 		if( nextToSell ){
-			_itemsToSell.push( nextToSell );
+			_itemsToSell[hero.heroType].push( nextToSell );
 		}
 	}
 	// Move the hero in battle position: just behind the front line but far enough from the enemy tower
-	else if( distance( _myHero, battlePosition ) > 50 
+	else if( distance( hero, battlePosition ) > 50 
 			&& distance( battlePosition, _enemyTower ) > _enemyTower.attackRange ){
 		move( battlePosition.x, battlePosition.y );
 	}
 	// Enemy hero at range and no units can aggro: attack
-	else if( atRange( _enemyHero, _myHero ) && _units.canAggroHero.length === 0 ){
-		attack( _enemyHero.id );
+	else if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length === 0 ){
+		attack( hero.enemyHeroesAtRange[0] );
 	}
 	// If a unit at range: attack
-	else if( _units.atHeroRange.length > 0 ){
-		attack( _units.atHeroRange[0] );
+	else if( hero.enemyUnitsAtRange.length > 0 ){
+		attack( hero.enemyUnitsAtRange[0] );
 	}
 	// Else, wait
 	else {
 		wait();
 	}
-}
-
-function valkyrie(){
-	
 }
 
 // Action functions
@@ -413,6 +414,10 @@ function distance( e1, e2 ){
 
 function sortByCostAsc( a, b ){
 	return a.cost - b.cost;
+}
+
+function sortByHealthAsc( a, b ){
+	return a.health - b.health;
 }
 
 // Debug functions
