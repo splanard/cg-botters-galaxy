@@ -99,7 +99,7 @@ _itemSets.farmer.sort( sortItemsByCostAsc );
 
 // SKILLS
 // Init skill cooldowns
-var _skills = ['BLINK', 'BURNING', 'FIREBALL'];
+var _skills = ['BASH', 'BLINK', 'BURNING', 'CHARGE', 'EXPLOSIVE_SHIELD', 'FIREBALL'];
 var _cooldowns = {};
 for( var i=0; i < _skills.length; i++ ){
 	_cooldowns[_skills[i]] = 0;
@@ -521,6 +521,24 @@ function genItems( hero, itemSet ){
 
 // Skills algo functions
 
+function hulkBash( hero, target ){
+	if( hero.name === 'HULK' && _cooldowns.BASH === 0 && hero.mana >= 40 ){
+		// TODO!
+	}
+}
+
+function hulkCharge( hero, target ){
+	if( hero.name === 'HULK' && _cooldowns.CHARGE === 0 && hero.mana >= 20 ){
+		// TODO!
+	}
+}
+
+function hulkExplosiveShield( hero ){
+	if( hero.name === 'HULK' && _cooldowns.EXPLOSIVE_SHIELD === 0 && hero.mana >= 30 ){
+		// TODO!
+	}
+}
+
 function ironmanBlink( hero, dest ){
 	if( hero.name === 'IRONMAN' && _cooldowns.BLINK === 0 && hero.mana >= 16 ){
 		// Skill conf
@@ -664,6 +682,11 @@ function wait(){
 
 // Skills actions functions
 
+function bash( unitId ){
+	print('BASH ' + unitId);
+	_cooldowns.BASH = 10;
+}
+
 function blink( x, y ){
 	print('BLINK ' + convertX(x) + ' ' + y + ';BLINK !');
 	_cooldowns.BLINK = 3;
@@ -672,6 +695,16 @@ function blink( x, y ){
 function burning( x, y ){
 	print('BURNING ' + convertX(x) + ' ' + y + ';BURNING !');
 	_cooldowns.BURNING = 5;
+}
+
+function charge( unitId ){
+	print('CHARGE ' + unitId);
+	_cooldowns.CHARGE = 4;
+}
+
+function explosiveShield(){
+	print('EXPLOSIVESHIELD');
+	_cooldowns.EXPLOSIVE_SHIELD = 8;
 }
 
 function fireball( x, y ){
