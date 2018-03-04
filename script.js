@@ -7,6 +7,7 @@
 
 // Const
 var AGGRO_DISTANCE = 300;
+var LANE_HEIGHT = 300;
 var MAX_ITEMS = 4;
 
 var _myTeam = parseInt(readline());
@@ -213,7 +214,7 @@ while( true ){
 		
 		// Units
 		else if( u.unitType === 'UNIT' ){
-			u.attackSpeed = 0.2;			
+			u.attackSpeed = 0.2;
 			
 			// Ally units...
 			if( u.team === _myTeam ){ 
@@ -400,9 +401,11 @@ function laneRange( heroIdx ){
 	var HEALTH_RATIO_POTION = 0.3;
 	var MIN_DISTANCE_FROM_MY_FRONT = 100;
 	
+	// Distance from enemy front to cover full lane height
+	var distanceFromEnemyFront = Math.trunc( Math.sqrt( Math.pow(hero.attackRange, 2) - Math.pow(LANE_HEIGHT/2, 2) ) );
 	// Battle position
 	var battlePosition = {
-		'x': Math.max( _myTower.x, Math.min( _myFront - MIN_DISTANCE_FROM_MY_FRONT, _enemyFront - hero.attackRange ) ),
+		'x': Math.max( _myTower.x, Math.min( _myFront - MIN_DISTANCE_FROM_MY_FRONT, _enemyFront - distanceFromEnemyFront ) ),
 		'y': _enemyTower.y
 	};
 	
@@ -430,8 +433,7 @@ function laneRange( heroIdx ){
 		attack( hero.enemyHeroesAtRange[0] );
 	}
 	// If a unit at range: attack
-	else if( hero.enemyUnitsAtRange.length > 0 
-			&& _units[hero.enemyUnitsAtRange[0]].health < hero.attackDamage ){
+	else if( hero.enemyUnitsAtRange.length > 0 ){
 		attack( hero.enemyUnitsAtRange[0] );
 	}
 	// Else, wait
@@ -501,14 +503,17 @@ function ironmanFireball( hero ){
 			var enemy = _enemyHeroes[i];
 			var d = distance( hero, enemy );
 			var damage = hero.mana * 0.2 + 55 * d / 1000;
-			if( d <= 900 && ( damage >= hero.attackDamage || damage >= enemy.health ) ){
+			if( d <= 900 // skill range OK
+					&& enemy.health / enemy.maxHealth < 0.75 // enemy is at less than 75% health
+					&& ( damage >= hero.attackDamage || damage >= enemy.health ) ){ // worth using skill
 				target = enemy;
+				break;
 			}
 		}
 		if( target ){
-			var targetX = hero.x + (target.x - hero.x) * 900/1000;
-			var targetY = hero.y + (target.y - hero.y) * 900/1000;
-			fireball( targetX, targetY );
+			//var targetX = hero.x + (target.x - hero.x) * 900/1000;
+			//var targetY = hero.y + (target.y - hero.y) * 900/1000;
+			fireball( target.x, target.y );
 			return true;
 		}
 	}
@@ -599,7 +604,7 @@ function sortItemsByCostAsc( a, b ){
 }
 
 function sortByHealthAsc( a, b ){
-	return a.health - b.health;
+	return _units[a].health - _units[b].health;
 }
 
 function winner( unit1, unit2 ){
