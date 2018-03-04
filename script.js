@@ -372,7 +372,12 @@ function farmer( heroIdx ){
 	}
 	// Unit at range: fight
 	else if( hero.neutralUnitsAtRange.length > 0 ){
-		attack( hero.neutralUnitsAtRange[0] );
+		if( hulkExplosiveShield( hero ) ){
+			return;
+		}
+		else {
+			attack( hero.neutralUnitsAtRange[0] );
+		}
 	}
 	else if( hero.enemyUnitsAtRange.length > 0 ){
 		attack( hero.enemyUnitsAtRange[0] );
@@ -535,8 +540,10 @@ function hulkCharge( hero, target ){
 
 function hulkExplosiveShield( hero ){
 	if( hero.name === 'HULK' && _cooldowns.EXPLOSIVE_SHIELD === 0 && hero.mana >= 30 ){
-		// TODO!
+		explosiveShield();
+		return true;
 	}
+	return false;
 }
 
 function ironmanBlink( hero, dest ){
@@ -683,7 +690,7 @@ function wait(){
 // Skills actions functions
 
 function bash( unitId ){
-	print('BASH ' + unitId);
+	print('BASH ' + unitId + ';BASH !');
 	_cooldowns.BASH = 10;
 }
 
@@ -698,12 +705,12 @@ function burning( x, y ){
 }
 
 function charge( unitId ){
-	print('CHARGE ' + unitId);
+	print('CHARGE ' + unitId + ';CHARGE !');
 	_cooldowns.CHARGE = 4;
 }
 
 function explosiveShield(){
-	print('EXPLOSIVESHIELD');
+	print('EXPLOSIVESHIELD;EXPLOSIVE SHIELD !');
 	_cooldowns.EXPLOSIVE_SHIELD = 8;
 }
 
