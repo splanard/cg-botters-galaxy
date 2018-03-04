@@ -504,7 +504,6 @@ function ironmanFireball( hero ){
 			var d = distance( hero, enemy );
 			var damage = hero.mana * 0.2 + 55 * d / 1000;
 			if( d <= 900 // skill range OK
-					&& enemy.health / enemy.maxHealth < 0.75 // enemy is at less than 75% health
 					&& ( damage >= hero.attackDamage || damage >= enemy.health ) ){ // worth using skill
 				target = enemy;
 				break;
