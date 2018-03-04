@@ -71,8 +71,8 @@ for( var i = 0; i < itemCount; i++ ){
 		}
 	}
 	
-	// LaneRange role needs full damage
-	if( item.damage > 0 ){
+	// LaneRange role needs full damage and mana / mana regen (for Ironman's skills)
+	if( item.damage > 0 || item.mana > 0 || item.manaRegeneration > 0 ){
 		_itemSets.laneRange.push( item.name );
 	}
 	// Farmer role needs damage, moveSpeed and health
@@ -97,17 +97,22 @@ _itemSets.farmer.sort( sortItemsByCostAsc );
 
 //printErr( stringify( _items ) );
 
+// SKILLS
+// Init skill cooldowns
+var _skills = ['BURNING', 'FIREBALL'];
+var _cooldowns = {};
+for( var i=0; i < _skills.length; i++ ){
+	_cooldowns[_skills[i]] = 0;
+}
+
 // GAME LOOP
 var _round = -2;
 var _myItems = {};
 var _roles = {};
-var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _neutrals, _myFront, _enemyFront;
+var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _neutrals, _enemies, _myFront, _enemyFront;
 var _previousState = {
 	'myHeroes': [{ 'health': 0 }, { 'health': 0 }],
 	'myTower' : { 'health': 0 }
-};
-var _cooldowns = {
-	'FIREBALL': 0
 };
 while( true ){
     // Gold input
@@ -123,11 +128,16 @@ while( true ){
 	_enemyFront = 1820;
 	
 	// Reduce cooldowns
-	if( _cooldowns.FIREBALL > 0 ){ _cooldowns.FIREBALL--; }
+	for( var i=0; i < _skills.length; i++ ){
+		if( _cooldowns[_skills[i]] > 0 ){
+			_cooldowns[_skills[i]]--;
+		}
+	}
 	
 	// Units input
 	_units = {};
 	_neutrals = [];
+	_enemies = [];
 	_myHeroes = [];
 	_enemyHeroes = [];
 	var entityCount = parseInt(readline());
@@ -195,6 +205,7 @@ while( true ){
 			// Enemy hero
 			else {
 				_enemyHeroes.push(u);
+				_enemies.push(u.id);
 			}
 		}
 		
@@ -225,6 +236,8 @@ while( true ){
 			}
 			// Enemy units...
 			else {
+				_enemies.push(u.id);
+				
 				// Battle front
 				if( u.x < _enemyFront ){
 					_enemyFront = u.x;
@@ -419,7 +432,8 @@ function laneRange( heroIdx ){
     // Fall back ? Items ? IRONMAN Fireball ?
 	else if( genFallback( hero, hero.maxHealth * HEALTH_RATIO_BACK, true )
 			|| genItems( hero, 'laneRange' )
-			|| ironmanFireball( hero ) ){
+			|| ironmanFireball( hero )
+			|| ironmanBurning( hero ) ){
 		return;
 	}
 	// ---
@@ -496,6 +510,50 @@ function genItems( hero, itemSet ){
 	return false;
 }
 
+function ironmanBurning( hero ){
+	if( hero.name === 'IRONMAN' && _cooldowns.BURNING === 0 && hero.mana >= 50
+			&& ( hero.enemyUnitsAtRange.length > 0 || hero.enemyHeroesAtRange.length > 0 ) ){
+		// Skill algo conf
+		var RANGE = 250;
+		var RADIUS = 100;
+		var SCORE_HERO = 3;
+		var SCORE_LAST_HIT = 2
+		var SCORE_LIMIT = 5;
+		
+		var damage = hero.manaRegeneration * 3 + 30;
+				
+		var targets = [];
+		var potentialTargets = hero.enemyUnitsAtRange.slice().concat( hero.enemyHeroesAtRange );
+		
+		// For every target at range, count the number of others in the skill radius zone
+		for( var i=0; i < potentialTargets.length; i++ ){
+			var u = _units[potentialTargets[i]];
+			if( distance( u, hero ) <= RANGE ){
+				var score = 0;
+				for( var j=0; j < _enemies.length; j++ ){
+					var uu = _units[_enemies[j]];
+					if( distance( u, uu ) <= RADIUS ){ // is in the radius zone
+						if( uu.unitType === 'HERO' ){ score += SCORE_HERO; }
+						else if( uu.health < damage ){ score += SCORE_LAST_HIT; }
+						else { score += 1; }
+					}
+				}
+				if( score >= SCORE_LIMIT ){
+					targets.push({ 'score': score, 'x': u.x, 'y': u.y });
+				}
+			}
+		}
+		
+		// If there is somme targets, sort them by desc score and cast skill on the better
+		if( targets.length > 0 ){
+			targets.sort( function(a, b){ return b.score - a.score; } );
+			burning( targets[0].x, targets[0].y );
+			return true;
+		}
+	}
+	return false;
+}
+
 function ironmanFireball( hero ){
 	if( hero.name === 'IRONMAN' && _cooldowns.FIREBALL === 0 && hero.mana >= 60 ){
 		var target;
@@ -538,11 +596,6 @@ function buy( item ){
 	changeGold( -item.cost );
 }
 
-function fireball( x, y ){
-	print('FIREBALL ' + convertX(x) + ' ' + y + ';Fireball !');
-	_cooldowns.FIREBALL = 6;
-}
-
 function move( x, y, msg ){
 	if( msg ){
 		print('MOVE ' + convertX(x) + ' ' + y + ';' + msg);
@@ -563,6 +616,18 @@ function sell( item ){
 
 function wait(){
 	print('WAIT');
+}
+
+// Skills functions
+
+function burning( x, y ){
+	print('BURNING ' + convertX(x) + ' ' + y + ';BURNING !');
+	_cooldowns.BURNING = 5;
+}
+
+function fireball( x, y ){
+	print('FIREBALL ' + convertX(x) + ' ' + y + ';FIREBALL !');
+	_cooldowns.FIREBALL = 6;
 }
 
 // Utility functions
