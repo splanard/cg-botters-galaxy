@@ -70,8 +70,8 @@ for( var i = 0; i < itemCount; i++ ){
 		}
 	}
 	
-	// LaneRange role needs moveSpeed and damage
-	if( item.damage > 0 || item.moveSpeed > 0 ){
+	// LaneRange role needs full damage
+	if( item.damage > 0 ){
 		_itemSets.laneRange.push( item.name );
 	}
 	// Farmer role needs damage, moveSpeed and health
@@ -203,7 +203,6 @@ while( true ){
 			}
 			
 			_neutrals.push( u.id );
-			_units[u.id] = u;
 		}
 		
 		// Units
@@ -242,8 +241,9 @@ while( true ){
 				}
 			}
 			
-			_units[u.id] = u;
 		}
+		
+		_units[u.id] = u;
     }
 	
 	// Normal round
@@ -326,71 +326,47 @@ function farmer( heroIdx ){
 	// Order spawn points by distance from my tower
 	_spawnPoints.sort( function(a, b){ return distance( _myTower, a ) - distance( _myTower, b ); } );
 	
-	// Next item to buy
-	var nextItem = _items[_itemSets.farmer[_myItems[hero.name].maxRank + 1]];
-	
 	// ---
 	// Buy health potion if needed
 	if( hero.health < HEALTH_LEVEL_POTION 
-			&& _gold >= _potions.health[0].cost ){
-		buy( _potions.health[0] );
+			&& _gold >= _potions.health[1].cost ){
+		buy( _potions.health[1] );
 	}
 	// ---
-    // If my hero is weak: fall back if possible or fight.
-	else if( hero.health < HEALTH_LEVEL_POTION ){
-		// My hero is already at the tower...
-		if( hero.x <= _myTower.x ){
-			// Enemy heroes at range and not too much enemy units around: attack hero
-			if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length < 2 ){
-				attack( hero.enemyHeroesAtRange[0] );
-			}
-			// Enemy units at range: attack them
-			else if( hero.enemyUnitsAtRange.length > 0 ){
-				attack( hero.enemyUnitsAtRange[0] );
-			}
-			// No enemies at range: if not under attack, move a bit ahead...
-			else if( !hero.underAttack && hero.threateningHeroes.length === 0 ){
-				move( _myTower .x + 100, _myTower.y );
-			}
-			// Under attack: try to move a bit further away
-			else {
-				move( 0, _myTower.y );
-			}
-		}
-		// Back to the tower !
-		else {
-			back();
-		}
-	}
-	// ---
-	// Full of items: sell the lesser one
-	else if( hero.itemsOwned === MAX_ITEMS ){
-		sell( _items[_myItems[hero.name].list.shift()] );
-	}
-	// Buy items
-	else if( _availableGold >= nextItem.cost ){
-		buy( nextItem );
-		_myItems[hero.name].list.push( nextItem.name );
-		_myItems[hero.name].maxRank++;
+    // Fall back ? Items ?
+	else if( genFallback( hero, HEALTH_LEVEL_POTION, false )
+			|| genItems( hero, 'farmer' ) ){
+		return;
 	}
 	// ---
 	// My tower is under attack: go back to base
 	else if( _myTower.underAttack ){
 		back();
 	}
-	// 
+	// Enemy hero at range and alone: if I would win, fight!
+	else if( hero.enemyHeroesAtRange.length > 0
+			&& hero.threateningHeroes.length <= 1
+			&& hero.enemyUnitsCanAggro.length === 0 
+			&& winner( hero, _units[hero.enemyHeroesAtRange[0]] ).id === hero.id ){
+		attack( hero.enemyHeroesAtRange[0] );
+	}
+	// Unit at range: fight
 	else if( hero.neutralUnitsAtRange.length > 0 ){
 		attack( hero.neutralUnitsAtRange[0] );
 	}
 	else if( hero.enemyUnitsAtRange.length > 0 ){
 		attack( hero.enemyUnitsAtRange[0] );
 	}
-	else if( _neutrals.length > 0 ){
+	// Neutrals between my tower and my front line: check if my hero can beat them
+	else if( hero.health > HEALTH_LEVEL_POTION && _neutrals.length > 0 ){
+		printErr( 'before sorting: ' + _neutrals );
+		_neutrals.sort( function(a, b){ return distance(_units[a], hero) - distance(_units[b], hero); } );
+		printErr( 'after sorting: ' + _neutrals );
 		var target;
 		for( var i=0; i < _neutrals.length; i++ ){
 			var neutral = _units[_neutrals[i]];
 			var win = winner( neutral, hero );
-			if( win.id === hero.id && win.health > HEALTH_LEVEL_POTION ){
+			if( neutral.x <= _myFront && win.id === hero.id && win.health > HEALTH_LEVEL_POTION ){
 				target = neutral;
 				break;
 			}
@@ -399,12 +375,12 @@ function farmer( heroIdx ){
 			move( target.x, target.y );
 		}
 		else {
-			move( _spawnPoints[0].x, _spawnPoints[0].y );
+			move( _myFront, _myTower.y );
 		}
 	}
-	// Move to the closer spawn point
+	// Move to the front line
 	else {
-		move( _spawnPoints[0].x, _spawnPoints[0].y );
+		move( _myFront, _myTower.y );
 	}
 }
 
@@ -420,10 +396,6 @@ function laneRange( heroIdx ){
 	var HEALTH_RATIO_POTION = 0.3;
 	var MIN_DISTANCE_FROM_MY_FRONT = 100;
 	
-	// Next item to buy
-	var nextItem = _items[_itemSets.laneRange[_myItems[hero.name].maxRank + 1]];
-	//printErr( 'Next item to buy: ' + nextItem.name + '(' + nextItem.cost + ')' );
-	
 	// Battle position
 	var battlePosition = {
 		'x': Math.max( _myTower.x, Math.min( _myFront - MIN_DISTANCE_FROM_MY_FRONT, _enemyFront - hero.attackRange ) ),
@@ -437,42 +409,10 @@ function laneRange( heroIdx ){
 		buy( _potions.health[0] );
 	}
 	// ---
-    // If my hero is weak or under attack: fall back if possible or fight.
-	else if( hero.health < hero.maxHealth * HEALTH_RATIO_BACK || hero.underAttack ){
-		// My hero is already at the tower...
-		if( hero.x <= _myTower.x ){
-			// Enemy heroes at range and not too much enemy units around: attack hero
-			if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length < 2 ){
-				attack( hero.enemyHeroesAtRange[0] );
-			}
-			// Enemy units at range: attack them
-			else if( hero.enemyUnitsAtRange.length > 0 ){
-				attack( hero.enemyUnitsAtRange[0] );
-			}
-			// No enemies at range: if not under attack, move a bit ahead...
-			else if( !hero.underAttack && hero.threateningHeroes.length === 0 ){
-				move( battlePosition.x, battlePosition.y );
-			}
-			// Under attack: try to move a bit further away
-			else {
-				move( 0, _myTower.y );
-			}
-		}
-		// Back to the tower !
-		else {
-			back();
-		}
-	}
-	// ---
-	// Full of items: sell the lesser one
-	else if( hero.itemsOwned === MAX_ITEMS ){
-		sell( _items[_myItems[hero.name].list.shift()] );
-	}
-	// Buy items
-	else if( _availableGold >= nextItem.cost ){
-		buy( nextItem );
-		_myItems[hero.name].list.push( nextItem.name );
-		_myItems[hero.name].maxRank++;
+    // Fall back ? Items ?
+	else if( genFallback( hero, hero.maxHealth * HEALTH_RATIO_BACK, true )
+			|| genItems( hero, 'laneRange' ) ){
+		return;
 	}
 	// ---
 	// Move the hero in battle position: just behind the front line but far enough from the enemy tower
@@ -485,13 +425,68 @@ function laneRange( heroIdx ){
 		attack( hero.enemyHeroesAtRange[0] );
 	}
 	// If a unit at range: attack
-	else if( hero.enemyUnitsAtRange.length > 0 ){
+	else if( hero.enemyUnitsAtRange.length > 0 
+			&& _units[hero.enemyUnitsAtRange[0]].health < hero.attackDamage ){
 		attack( hero.enemyUnitsAtRange[0] );
 	}
 	// Else, wait
 	else {
 		wait();
 	}
+}
+
+function genFallback( hero, healthLevel, fallBackWhenUnderAttack ){
+	var concerned = false;
+	// If my hero is weak or under attack: fall back if possible or fight.
+	if( hero.health < healthLevel || (fallBackWhenUnderAttack && hero.underAttack) ){
+		// Back to the tower !
+		if( hero.x > _myTower.x ){
+			back();
+		}
+		// My hero is already at the tower...
+		else {
+			// Enemy heroes at range and not too much enemy units around: attack hero
+			if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length < 2 ){
+				attack( hero.enemyHeroesAtRange[0] );
+			}
+			// Enemy units at range: attack them
+			else if( hero.enemyUnitsAtRange.length > 0 ){
+				attack( hero.enemyUnitsAtRange[0] );
+			}
+			// Under attack but no enemies at range: move a bit further away
+			else if( hero.underAttack ){
+				move( 0, _myTower.y );
+			}
+			// Wait here to have enough money tobuy a potion...
+			else {
+				wait();
+			}
+		}
+		concerned = true;
+	}
+	return concerned;
+}
+
+function genItems( hero, itemSet ){
+	var concerned = false;
+	
+	// Next item to buy
+	var nextItem = _items[_itemSets[itemSet][_myItems[hero.name].maxRank + 1]];
+	
+	// Full of items: sell the lesser one
+	if( hero.itemsOwned === MAX_ITEMS ){
+		sell( _items[_myItems[hero.name].list.shift()] );
+		concerned = true;
+	}
+	// Buy next item
+	else if( _availableGold >= nextItem.cost ){
+		buy( nextItem );
+		_myItems[hero.name].list.push( nextItem.name );
+		_myItems[hero.name].maxRank++;
+		concerned = true;
+	}
+	
+	return concerned;
 }
 
 // Action functions
@@ -553,7 +548,7 @@ function willBeAtRange( entity, from ){
 
 function changeGold( delta ){
 	_gold += delta;
-	_availableGold = _gold - _potions.health[0].cost;
+	_availableGold = _gold - 2 * _potions.health[0].cost;
 }
 
 function convertX( x ){
