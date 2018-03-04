@@ -384,21 +384,22 @@ function farmer( heroIdx ){
 		for( var i=0; i < _neutrals.length; i++ ){
 			var neutral = _units[_neutrals[i]];
 			var win = winner( neutral, hero );
-			if( neutral.x <= _myFront && win.id === hero.id && win.health > HEALTH_LEVEL_POTION ){
+			if( neutral.x <= _myFront && distance( neutral, _enemyTower ) > _enemyTower.attackRange // neutral position
+					&& win.id === hero.id && win.health > HEALTH_LEVEL_POTION ){ // fight issue
 				target = neutral;
 				break;
 			}
 		}
 		if( target ){
-			move( target.x, target.y );
+			moveSafe( target.x, target.y );
 		}
 		else {
-			move( _myFront, _myTower.y );
+			moveSafe( _myFront, _myTower.y );
 		}
 	}
 	// Move to the front line
 	else {
-		move( _myFront, _myTower.y );
+		moveSafe( _myFront, _myTower.y );
 	}
 }
 
@@ -521,7 +522,6 @@ function genItems( hero, itemSet ){
 // Skills algo functions
 
 function ironmanBlink( hero, dest ){
-	printErr( 'ironmanBlink(' + hero.name + ', ' + dest.x + ':' + dest.y );
 	if( hero.name === 'IRONMAN' && _cooldowns.BLINK === 0 && hero.mana >= 16 ){
 		// Skill conf
 		var RANGE = 200;
@@ -543,7 +543,7 @@ function ironmanBurning( hero ){
 		var RANGE = 250;
 		var RADIUS = 100;
 		var SCORE_HERO = 3;
-		var SCORE_LAST_HIT = 2
+		var SCORE_LAST_HIT = 2;
 		var SCORE_LIMIT = 5;
 		
 		var damage = hero.manaRegeneration * 3 + 30;
@@ -633,6 +633,20 @@ function move( x, y, msg ){
 
 function moveAttack( x, y, unitId ){
 	print('MOVE_ATTACK ' + convertX(x) + ' ' + y + ' ' + unitId);
+}
+
+function moveSafe( x, y ){
+	// Move safe from tower attack range
+	var fromTower = distance( _enemyTower, { 'x': x, 'y': y } );
+	if( fromTower === _enemyTower.attackRange + 1 ){
+		wait();
+	}
+	else if( fromTower <= _enemyTower.attackRange ){
+		var ratio = (_enemyTower.attackRange + 1) / fromTower;
+		move( _enemyTower.x + ( x - _enemyTower.x ) * ratio, _enemyTower.y + ( y - _enemyTower.y ) );
+	} else {
+		move( x, y );
+	}
 }
 
 function sell( item ){
