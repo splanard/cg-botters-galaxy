@@ -105,6 +105,9 @@ var _previousState = {
 	'myHeroes': [{ 'health': 0 }, { 'health': 0 }],
 	'myTower' : { 'health': 0 }
 };
+var _cooldowns = {
+	'FIREBALL': 0
+};
 while( true ){
     // Gold input
 	_gold = parseInt(readline());
@@ -117,6 +120,9 @@ while( true ){
 	// Init battle fronts coordinates
 	_myFront = 100;
 	_enemyFront = 1820;
+	
+	// Reduce cooldowns
+	if( _cooldowns.FIREBALL > 0 ){ _cooldowns.FIREBALL--; }
 	
 	// Units input
 	_units = {};
@@ -359,9 +365,7 @@ function farmer( heroIdx ){
 	}
 	// Neutrals between my tower and my front line: check if my hero can beat them
 	else if( hero.health > HEALTH_LEVEL_POTION && _neutrals.length > 0 ){
-		printErr( 'before sorting: ' + _neutrals );
 		_neutrals.sort( function(a, b){ return distance(_units[a], hero) - distance(_units[b], hero); } );
-		printErr( 'after sorting: ' + _neutrals );
 		var target;
 		for( var i=0; i < _neutrals.length; i++ ){
 			var neutral = _units[_neutrals[i]];
@@ -409,9 +413,10 @@ function laneRange( heroIdx ){
 		buy( _potions.health[0] );
 	}
 	// ---
-    // Fall back ? Items ?
+    // Fall back ? Items ? IRONMAN Fireball ?
 	else if( genFallback( hero, hero.maxHealth * HEALTH_RATIO_BACK, true )
-			|| genItems( hero, 'laneRange' ) ){
+			|| genItems( hero, 'laneRange' )
+			|| ironmanFireball( hero ) ){
 		return;
 	}
 	// ---
@@ -436,7 +441,6 @@ function laneRange( heroIdx ){
 }
 
 function genFallback( hero, healthLevel, fallBackWhenUnderAttack ){
-	var concerned = false;
 	// If my hero is weak or under attack: fall back if possible or fight.
 	if( hero.health < healthLevel || (fallBackWhenUnderAttack && hero.underAttack) ){
 		// Back to the tower !
@@ -445,8 +449,11 @@ function genFallback( hero, healthLevel, fallBackWhenUnderAttack ){
 		}
 		// My hero is already at the tower...
 		else {
+			if( ironmanFireball( hero ) ){
+				return true;
+			}
 			// Enemy heroes at range and not too much enemy units around: attack hero
-			if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length < 2 ){
+			else if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length < 2 ){
 				attack( hero.enemyHeroesAtRange[0] );
 			}
 			// Enemy units at range: attack them
@@ -462,31 +469,50 @@ function genFallback( hero, healthLevel, fallBackWhenUnderAttack ){
 				wait();
 			}
 		}
-		concerned = true;
+		return true;
 	}
-	return concerned;
+	return false;
 }
 
 function genItems( hero, itemSet ){
-	var concerned = false;
-	
 	// Next item to buy
 	var nextItem = _items[_itemSets[itemSet][_myItems[hero.name].maxRank + 1]];
 	
 	// Full of items: sell the lesser one
 	if( hero.itemsOwned === MAX_ITEMS ){
 		sell( _items[_myItems[hero.name].list.shift()] );
-		concerned = true;
+		return true;
 	}
 	// Buy next item
 	else if( _availableGold >= nextItem.cost ){
 		buy( nextItem );
 		_myItems[hero.name].list.push( nextItem.name );
 		_myItems[hero.name].maxRank++;
-		concerned = true;
+		return true;
 	}
 	
-	return concerned;
+	return false;
+}
+
+function ironmanFireball( hero ){
+	if( hero.name === 'IRONMAN' && _cooldowns.FIREBALL === 0 && hero.mana >= 60 ){
+		var target;
+		for( var i=0; i < _enemyHeroes.length; i++ ){
+			var enemy = _enemyHeroes[i];
+			var d = distance( hero, enemy );
+			var damage = hero.mana * 0.2 + 55 * d / 1000;
+			if( d <= 900 && ( damage >= hero.attackDamage || damage >= enemy.health ) ){
+				target = enemy;
+			}
+		}
+		if( target ){
+			var targetX = hero.x + (target.x - hero.x) * 900/1000;
+			var targetY = hero.y + (target.y - hero.y) * 900/1000;
+			fireball( targetX, targetY );
+			return true;
+		}
+	}
+	return false;
 }
 
 // Action functions
@@ -506,6 +532,11 @@ function back(){
 function buy( item ){
 	print('BUY ' + item.name + ';+' + item.name);
 	changeGold( -item.cost );
+}
+
+function fireball( x, y ){
+	print('FIREBALL ' + convertX(x) + ' ' + y + ';Fireball !');
+	_cooldowns.FIREBALL = 6;
 }
 
 function move( x, y, msg ){
