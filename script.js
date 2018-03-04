@@ -582,13 +582,17 @@ function ironmanBurning( hero ){
 
 function ironmanFireball( hero ){
 	if( hero.name === 'IRONMAN' && _cooldowns.FIREBALL === 0 && hero.mana >= 60 ){
+		// Skill conf
+		var DAMAGE_MIN = 70;
+		var RANGE = 900;
+		
 		var target;
 		for( var i=0; i < _enemyHeroes.length; i++ ){
 			var enemy = _enemyHeroes[i];
 			var d = distance( hero, enemy );
 			var damage = hero.mana * 0.2 + 55 * d / 1000;
-			if( d <= 900 // skill range OK
-					&& ( damage >= hero.attackDamage || damage >= enemy.health ) ){ // worth using skill
+			if( d <= RANGE // skill range OK
+					&& ( damage >= DAMAGE_MIN || damage >= enemy.health ) ){ // worth using skill
 				target = enemy;
 				break;
 			}
