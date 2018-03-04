@@ -99,7 +99,7 @@ _itemSets.farmer.sort( sortItemsByCostAsc );
 
 // SKILLS
 // Init skill cooldowns
-var _skills = ['BURNING', 'FIREBALL'];
+var _skills = ['BLINK', 'BURNING', 'FIREBALL'];
 var _cooldowns = {};
 for( var i=0; i < _skills.length; i++ ){
 	_cooldowns[_skills[i]] = 0;
@@ -440,7 +440,11 @@ function laneRange( heroIdx ){
 	// Move the hero in battle position: just behind the front line but far enough from the enemy tower
 	else if( distance( hero, battlePosition ) > 50 
 			&& distance( battlePosition, _enemyTower ) > _enemyTower.attackRange ){
-		move( battlePosition.x, battlePosition.y );
+		if( ironmanBlink( hero, battlePosition ) ){
+			return;
+		} else {
+			move( battlePosition.x, battlePosition.y );
+		}
 	}
 	// Enemy hero at range and no units can aggro: attack
 	else if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length === 0 ){
@@ -461,7 +465,11 @@ function genFallback( hero, healthLevel, fallBackWhenUnderAttack ){
 	if( hero.health < healthLevel || (fallBackWhenUnderAttack && hero.underAttack) ){
 		// Back to the tower !
 		if( hero.x > _myTower.x ){
-			back();
+			if( ironmanBlink( hero, _myTower ) ){
+				return true;
+			} else {
+				back();
+			}
 		}
 		// My hero is already at the tower...
 		else {
@@ -510,10 +518,28 @@ function genItems( hero, itemSet ){
 	return false;
 }
 
+// Skills algo functions
+
+function ironmanBlink( hero, dest ){
+	printErr( 'ironmanBlink(' + hero.name + ', ' + dest.x + ':' + dest.y );
+	if( hero.name === 'IRONMAN' && _cooldowns.BLINK === 0 && hero.mana >= 16 ){
+		// Skill conf
+		var RANGE = 200;
+		
+		// For now, just using it to move faster regaining mana
+		var d = distance( hero, { 'x': dest.x, 'y': dest.y } );
+		if( d >= RANGE ){
+			blink( hero.x + ( dest.x - hero.x ) * RANGE / d, hero.y + ( dest.y - hero.y ) * RANGE / d );
+			return true;
+		}
+	}
+	return false;
+}
+
 function ironmanBurning( hero ){
 	if( hero.name === 'IRONMAN' && _cooldowns.BURNING === 0 && hero.mana >= 50
 			&& ( hero.enemyUnitsAtRange.length > 0 || hero.enemyHeroesAtRange.length > 0 ) ){
-		// Skill algo conf
+		// Skill conf
 		var RANGE = 250;
 		var RADIUS = 100;
 		var SCORE_HERO = 3;
@@ -618,7 +644,12 @@ function wait(){
 	print('WAIT');
 }
 
-// Skills functions
+// Skills actions functions
+
+function blink( x, y ){
+	print('BLINK ' + convertX(x) + ' ' + y + ';BLINK !');
+	_cooldowns.BLINK = 3;
+}
 
 function burning( x, y ){
 	print('BURNING ' + convertX(x) + ' ' + y + ';BURNING !');
