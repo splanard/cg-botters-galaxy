@@ -520,10 +520,18 @@ function laneRange( heroIdx ){
  */
 function genDeny( hero ){
 	if( hero.allyUnitsAtRange.length > 0 ){
-		var ally = _units[hero.allyUnitsAtRange[0]];
-		if( ally.health <= 50 ){
-			attack( hero.allyUnitsAtRange[0] );
-			return true;
+		// Fo each unit, check if it's killable by an enemy hero
+		for( var i=0; i < hero.allyUnitsAtRange.length; i++ ){
+			var ally = _units[hero.allyUnitsAtRange[i]];
+			if( ally.health <= hero.attackDamage ){
+				for( var j=0; j < _enemyHeroes.length; j++ ){
+					var enemy = _enemyHeroes[j];
+					if( isAtRange( ally, enemy ) && ally.health <= enemy.attackDamage ){
+						attack( ally.id );
+						return true;
+					}
+				}
+			}
 		}
 	}
 	return false;
@@ -557,7 +565,7 @@ function genFallback( hero, fallbackCondition ){
 			}
 			// Under attack but no enemies at range: move a bit further away
 			else if( hero.underAttack ){
-				move( 0, _myTower.y );
+				move( 0, hero.laneY );
 			}
 			// Wait here to have enough money tobuy a potion...
 			else {
