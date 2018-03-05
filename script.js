@@ -195,9 +195,19 @@ while( true ){
 				u.enemyHeroesAtRange = []; // IDs of all enemy heroes at range
 				u.threateningUnits = []; // IDs of all enemy units from which my hero is at range
 				u.threateningHeroes = []; //IDs of all enemy heroes from which my hero is at range
-				u.enemyUnitsCanAggro = []; // IDs of all the enemy units which can aggro my hero
-				u.neutralUnitsAtRange = [];
+				u.enemyUnitsCanAggro = []; // IDs of all the enemy units who can aggro my hero
+				u.neutralUnitsAtRange = []; // IDs of all neutral units at range
 				
+				// Hero-specific targets lists
+				if( u.name === 'HULK' ){
+					u.atBashRange = [];
+					u.atChargeRange = [];
+				}
+				else if( u.name === 'IRONMAN' ){
+					u.atBurningRange = [];
+				}
+				
+				// Is my hero under attack ?
 				u.underAttack = ( u.health < _previousState.myHeroes[_myHeroes.length].health );
 				
 				_myHeroes.push(u);
@@ -244,9 +254,11 @@ while( true ){
 				}
 				
 				// Interactions with my heroes
+				/*
 				for( var hid=0; hid < _myHeroes.length; hid++ ){
 					var hero = _myHeroes[hid];
-					// unit at range of my hero
+					var d = distance( hero, u );
+					// unit at attack range of my hero
 					if( isAtRange( u, hero ) ){
 						hero.enemyUnitsAtRange.push( u.id );
 					}
@@ -255,12 +267,12 @@ while( true ){
 						hero.threateningUnits.push( u.id );
 					}
 					// unit which can aggro my hero
-					if( distance( hero, u ) <= AGGRO_DISTANCE ){
+					if( d <= AGGRO_DISTANCE ){
 						hero.enemyUnitsCanAggro.push( u.id );
 					}
 				}
+				*/
 			}
-			
 		}
 		
 		_units[u.id] = u;
@@ -268,24 +280,48 @@ while( true ){
 	
 	// Normal round
 	if( roundType >= 0 ){
+		// For each hero, compute surounding units/heroes data
 		for( var i=0; i < _myHeroes.length; i++ ){
-			// Compute enemy heroes at range
-			for( var j=0; j < _enemyHeroes.length; j++ ){
-				var eh = _enemyHeroes[j];
-				// Enemy hero is at mines's attack range
-				if( isAtRange( eh, _myHeroes[i] ) ){
-					_myHeroes[i].enemyHeroesAtRange.push( eh.id );
+			var hero = _myHeroes[i];
+			for( var j=0; j < _enemies.length; j++ ){
+				var enemy = _units[_enemies[j]];
+				var d = distance( hero, enemy );
+				
+				// At attack range of my hero
+				if( d <= hero.attackRange ){
+					if( enemy.unitType === 'UNIT' ){
+						hero.enemyUnitsAtRange.push( enemy.id );
+					} else {
+						hero.enemyHeroesAtRange.push( enemy.id );
+					}
 				}
-				// Enemy hero is threatening mine
-				if( willBeAtRange( _myHeroes[i], eh ) ){
-					_myHeroes[i].threateningHeroes.push( eh.id );
+				// Lane unit threatening my hero
+				if( enemy.unitType === 'UNIT' && d <= enemy.attackRange ){
+					hero.threateningUnits.push( enemy.id );
+				}
+				// Lane units who can aggro my hero
+				if( enemy.unitType === 'UNIT' && d <= AGGRO_DISTANCE ){
+					hero.enemyUnitsCanAggro.push( enemy.id );
+				}
+				// Enemy hero threatening mine
+				if( enemy.unitType === 'HERO' && willBeAtRange( hero, enemy ) ){
+					hero.threateningHeroes.push( enemy.id );
+				}
+				
+				// Hero-specific distance checks
+				if( hero.name === 'HULK' && d <= 500 ){
+					hero.atChargeRange.push( enemy.id );
+					if( d <= 150 ){ hero.atBashRange.push( enemy.id ); }
+				}
+				if( hero.name === 'IRONMAN' && d <= 250 ){
+					hero.atBurningRange.push( enemy.id );
 				}
 			}
 			
 			// Sort potential targets by asc health
-			_myHeroes[i].enemyUnitsAtRange.sort( sortByHealthAsc );
-			_myHeroes[i].enemyHeroesAtRange.sort( sortByHealthAsc );
-			_myHeroes[i].neutralUnitsAtRange.sort( sortByHealthAsc );
+			hero.enemyUnitsAtRange.sort( sortByHealthAsc );
+			hero.enemyHeroesAtRange.sort( sortByHealthAsc );
+			hero.neutralUnitsAtRange.sort( sortByHealthAsc );
 		}
 		
 		// Action
@@ -563,9 +599,8 @@ function ironmanBlink( hero, dest ){
 
 function ironmanBurning( hero ){
 	if( hero.name === 'IRONMAN' && _cooldowns.BURNING === 0 && hero.mana >= 50
-			&& ( hero.enemyUnitsAtRange.length > 0 || hero.enemyHeroesAtRange.length > 0 ) ){
+			&& hero.atBurningRange.length > 0 ){
 		// Skill conf
-		var RANGE = 250;
 		var RADIUS = 100;
 		var SCORE_HERO = 3;
 		var SCORE_LAST_HIT = 2;
@@ -574,24 +609,21 @@ function ironmanBurning( hero ){
 		var damage = hero.manaRegeneration * 3 + 30;
 				
 		var targets = [];
-		var potentialTargets = hero.enemyUnitsAtRange.slice().concat( hero.enemyHeroesAtRange );
 		
 		// For every target at range, count the number of others in the skill radius zone
-		for( var i=0; i < potentialTargets.length; i++ ){
-			var u = _units[potentialTargets[i]];
-			if( distance( u, hero ) <= RANGE ){
-				var score = 0;
-				for( var j=0; j < _enemies.length; j++ ){
-					var uu = _units[_enemies[j]];
-					if( distance( u, uu ) <= RADIUS ){ // is in the radius zone
-						if( uu.unitType === 'HERO' ){ score += SCORE_HERO; }
-						else if( uu.health < damage ){ score += SCORE_LAST_HIT; }
-						else { score += 1; }
-					}
+		for( var i=0; i < hero.atBurningRange.length; i++ ){
+			var u = _units[hero.atBurningRange[i]];
+			var score = 0;
+			for( var j=0; j < _enemies.length; j++ ){
+				var uu = _units[_enemies[j]];
+				if( distance( u, uu ) <= RADIUS ){ // is in the radius zone
+					if( uu.unitType === 'HERO' ){ score += SCORE_HERO; }
+					else if( uu.health < damage ){ score += SCORE_LAST_HIT; }
+					else { score += 1; }
 				}
-				if( score >= SCORE_LIMIT ){
-					targets.push({ 'score': score, 'x': u.x, 'y': u.y });
-				}
+			}
+			if( score >= SCORE_LIMIT ){
+				targets.push({ 'score': score, 'x': u.x, 'y': u.y });
 			}
 		}
 		
