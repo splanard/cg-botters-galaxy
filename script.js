@@ -7,6 +7,7 @@
 
 // Const
 var AGGRO_DISTANCE = 300;
+var DISTANCE_FROM_LANE_CENTER = 30;
 var LANE_HEIGHT = 300;
 var MAX_ITEMS = 4;
 
@@ -200,6 +201,9 @@ while( true ){
 				u.threateningHeroes = []; //IDs of all enemy heroes from which my hero is at range
 				u.enemyUnitsCanAggro = []; // IDs of all the enemy units who can aggro my hero
 				u.neutralUnitsAtRange = []; // IDs of all neutral units at range
+				
+				// Each hero its position on the lane so that they are not aligned while in the lane
+				u.laneY = _myTower.y - DISTANCE_FROM_LANE_CENTER + _myHeroes.length * 2 * DISTANCE_FROM_LANE_CENTER;
 				
 				// Hero-specific targets lists
 				if( u.name === 'HULK' ){
@@ -430,7 +434,7 @@ function hulkFarmer( heroIdx ){
 	}
 	
 	// Else, move to the front line
-	moveSafe( _myFront, _myTower.y );
+	moveSafe( _myFront, hero.laneY );
 }
 
 /*
@@ -450,7 +454,7 @@ function laneRange( heroIdx ){
 	// Battle position
 	var battlePosition = {
 		'x': Math.max( _myTower.x, Math.min( _myFront - MIN_DISTANCE_FROM_MY_FRONT, _enemyFront - distanceFromEnemyFront ) ),
-		'y': _enemyTower.y
+		'y': hero.laneY
 	};
 	
 	// Fallback ?
