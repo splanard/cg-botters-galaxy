@@ -461,8 +461,8 @@ function laneRange( heroIdx ){
 	//printErr( '> ' + hero.name );
 	
 	// Role conf
-	var HEALTH_RATIO_BACK = 0.5;
-	var HEALTH_RATIO_POTION = 0.3;
+	var HEALTH_RATIO_BACK = 0.3;
+	var HEALTH_RATIO_POTION = 0.5;
 	var MIN_DISTANCE_FROM_MY_FRONT = 100;
 	
 	// Distance from enemy front to cover full lane height
