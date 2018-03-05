@@ -1,8 +1,7 @@
 /* TODO:
- * - Change the health backing ratio if no health potions available !
+ * - When Blinking with Ironman, be careful of what is in the landing zone (enemy heroes for example)
  * - Change the potion buying algorithm (buy the more rentable on to cover health loss)
  * - Improve attack to gain more last hits
- * - Implement deny
  */
 
 // Const
