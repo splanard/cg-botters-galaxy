@@ -113,7 +113,7 @@ for( var i=0; i < _skills.length; i++ ){
 var _round = -2;
 var _myItems = {};
 var _roles = {};
-var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _neutrals, _enemies, _myFront, _enemyFront;
+var _gold, _availableGold, _mySide, _myHeroes, _myTower, _enemyHeroes, _enemyTower, _units, _allies, _neutrals, _enemies, _myFront, _enemyFront;
 var _previousState = {
 	'myHeroes': [{ 'health': 0 }, { 'health': 0 }],
 	'myTower' : { 'health': 0 }
@@ -140,6 +140,7 @@ while( true ){
 	
 	// Units input
 	_units = {};
+	_allies = [];
 	_neutrals = [];
 	_enemies = [];
 	_myHeroes = [];
@@ -201,6 +202,7 @@ while( true ){
 				u.threateningHeroes = []; //IDs of all enemy heroes from which my hero is at range
 				u.enemyUnitsCanAggro = []; // IDs of all the enemy units who can aggro my hero
 				u.neutralUnitsAtRange = []; // IDs of all neutral units at range
+				u.allyUnitsAtRange = []; // IDs of all ally units at range 
 				
 				// Each hero its position on the lane so that they are not aligned while in the lane
 				u.laneY = _myTower.y - DISTANCE_FROM_LANE_CENTER + _myHeroes.length * 2 * DISTANCE_FROM_LANE_CENTER;
@@ -246,6 +248,8 @@ while( true ){
 			
 			// Ally units...
 			if( u.team === _myTeam ){ 
+				_allies.push( u.id );
+				
 				// Battle front
 				if( u.x > _myFront ){
 					_myFront = u.x;
@@ -270,6 +274,8 @@ while( true ){
 		// For each hero, compute surounding units/heroes data
 		for( var i=0; i < _myHeroes.length; i++ ){
 			var hero = _myHeroes[i];
+			
+			// Enemies
 			for( var j=0; j < _enemies.length; j++ ){
 				var enemy = _units[_enemies[j]];
 				var d = distance( hero, enemy );
@@ -305,10 +311,19 @@ while( true ){
 				}
 			}
 			
+			// Allies
+			for( var j=0; j < _allies.length; j++ ){
+				var ally = _units[_allies[j]];
+				if( isAtRange( ally, hero ) ){
+					hero.allyUnitsAtRange.push( ally.id );
+				}
+			}
+			
 			// Sort potential targets by asc health
 			hero.enemyUnitsAtRange.sort( sortByHealthAsc );
 			hero.enemyHeroesAtRange.sort( sortByHealthAsc );
 			hero.neutralUnitsAtRange.sort( sortByHealthAsc );
+			hero.allyUnitsAtRange.sort( sortByHealthAsc );
 		}
 		
 		// Action
@@ -373,13 +388,13 @@ function hulkFarmer( heroIdx ){
 	// ---
 	// My tower is under attack: go back to base
 	if( _myTower.underAttack ){
-		back();
+		back( _myTower.y );
 		return;
 	}
 	// ---
     // Fall back ? Health potion ? Items ?
-	if( genHealthPotion( hero, hero.maxHealth * HEALTH_RATIO_POTION )
-			|| genFallback( hero, hero.health < HEALTH_LEVEL_BACK )
+	if( genFallback( hero, hero.health < HEALTH_LEVEL_BACK )
+			|| genHealthPotion( hero, hero.maxHealth * HEALTH_RATIO_POTION )
 			|| genItems( hero, 'hulkFarmer' ) ){
 		return;
 	}
@@ -387,7 +402,7 @@ function hulkFarmer( heroIdx ){
 	if( hero.shield === 0 && hero.underAttack 
 			&& ( hero.threateningHeroes.length === 2 || hero.threateningHeroes.length + hero.threateningUnits.length >= 4 ) ){
 		if( !hulkExplosiveShield( hero ) ){
-			back();
+			back( hero.laneY );
 		}
 		return;
 	}
@@ -397,13 +412,13 @@ function hulkFarmer( heroIdx ){
 		return;
 	}
 	// Neutrals between my tower and my front line: check if my hero can beat them
-	if( hero.health > HEALTH_LEVEL_BACK && _neutrals.length > 0 ){
+	if( _neutrals.length > 0 ){
 		_neutrals.sort( function(a, b){ return distance(_units[a], hero) - distance(_units[b], hero); } );
 		var target;
 		for( var i=0; i < _neutrals.length; i++ ){
 			var neutral = _units[_neutrals[i]];
 			var win = winner( neutral, hero );
-			if( neutral.x <= _myFront + 200  // do not go too far inside enemy side
+			if( neutral.x <= _myFront  // do not go too far inside enemy side
 					&& distance( neutral, _enemyTower ) > _enemyTower.attackRange // do not approach  enemy tower
 					&& win.id === hero.id && win.health > HEALTH_LEVEL_BACK ){ // check fight issue
 				target = neutral;
@@ -484,13 +499,34 @@ function laneRange( heroIdx ){
 		attack( hero.enemyHeroesAtRange[0] );
 		return;
 	}
-	// If a unit at range: attack
+	// If a unit at range and last hit: attack
+	if( hero.enemyUnitsAtRange.length > 0 && _units[hero.enemyUnitsAtRange[0]].health <= hero.attackDamage ){
+		attack( hero.enemyUnitsAtRange[0] );
+		return;
+	}
+	// Deny if possible
+	if( genDeny( hero ) ){ return; }
+	// Unit at range: attack
 	if( hero.enemyUnitsAtRange.length > 0 ){
 		attack( hero.enemyUnitsAtRange[0] );
 		return;
 	}
 	// Else, wait
 	wait();
+}
+
+/*
+ * Generic function for denying last hit from the enemy
+ */
+function genDeny( hero ){
+	if( hero.allyUnitsAtRange.length > 0 ){
+		var ally = _units[hero.allyUnitsAtRange[0]];
+		if( ally.health <= 50 ){
+			attack( hero.allyUnitsAtRange[0] );
+			return true;
+		}
+	}
+	return false;
 }
 
 /*
@@ -503,7 +539,7 @@ function genFallback( hero, fallbackCondition ){
 			if( ironmanBlink( hero, _myTower ) ){
 				return true;
 			} else {
-				back();
+				back( hero.laneY );
 			}
 		}
 		// My hero is already at the tower...
@@ -534,6 +570,21 @@ function genFallback( hero, fallbackCondition ){
 }
 
 /*
+ * Generic function for potion buying
+ */
+function genHealthPotion( hero, healthLevelPotion ){
+	if( hero.health < healthLevelPotion ){
+		for( var i=_potions.health.length - 1; i >= 0; i-- ){
+			if( _gold >= _potions.health[i].cost && _potions.health[i].health <= hero.maxHealth - hero.health ){
+				buy( _potions.health[i] );
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/*
  * Generic function for items upgrades
  */
 function genItems( hero, itemSet ){
@@ -553,21 +604,6 @@ function genItems( hero, itemSet ){
 		return true;
 	}
 	
-	return false;
-}
-
-/*
- * Generic function for potion buying
- */
-function genHealthPotion( hero, healthLevelPotion ){
-	if( hero.health < healthLevelPotion ){
-		for( var i=_potions.health.length - 1; i >= 0; i-- ){
-			if( _gold >= _potions.health[i].cost && _potions.health[i].health <= hero.maxHealth - hero.health ){
-				buy( _potions.health[i] );
-				return true;
-			}
-		}
-	}
 	return false;
 }
 
@@ -733,8 +769,8 @@ function attackNearest( unitType ){
 	print('ATTACK_NEAREST ' + unitType);
 }
 
-function back(){
-	move( _myTower.x, _myTower.y, 'Back!' );
+function back( y ){
+	move( _myTower.x, y, 'Back!' );
 }
 
 function buy( item ){
