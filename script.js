@@ -395,7 +395,7 @@ function hulkFarmer( heroIdx ){
 	// ---
     // Fall back ? Health potion ? Items ?
 	if( genHealthPotion( hero, hero.maxHealth * HEALTH_RATIO_POTION )
-			|| genFallback( hero, HEALTH_LEVEL_BACK, false )
+			|| genFallback( hero, hero.health < HEALTH_LEVEL_BACK )
 			|| genItems( hero, 'hulkFarmer' ) ){
 		return;
 	}
@@ -473,10 +473,14 @@ function laneRange( heroIdx ){
 		'y': _enemyTower.y
 	};
 	
+	// Fallback ?
+	var fallback = ( hero.health < hero.maxHealth * HEALTH_RATIO_BACK 
+			|| ( hero.underAttack && hero.threateningUnits.length + hero.threateningHeroes.length > 0 ) );
+	
 	// ---
     // Health potion ? Fall back ? Items ? IRONMAN skills ?
 	if( genHealthPotion( hero, hero.maxHealth * HEALTH_RATIO_POTION )
-			|| genFallback( hero, hero.maxHealth * HEALTH_RATIO_BACK, true )
+			|| genFallback( hero, fallback )
 			|| genItems( hero, 'laneRange' )
 			|| ironmanFireball( hero )
 			|| ironmanBurning( hero ) ){
@@ -508,9 +512,8 @@ function laneRange( heroIdx ){
 /*
  * Generic function for fall back conditions
  */
-function genFallback( hero, healthLevel, fallBackWhenUnderAttack ){
-	// If my hero is weak or under attack: fall back if possible or fight.
-	if( hero.health < healthLevel || (fallBackWhenUnderAttack && hero.underAttack) ){
+function genFallback( hero, fallbackCondition ){
+	if( fallbackCondition ){
 		// Back to the tower !
 		if( hero.x > _myTower.x ){
 			if( ironmanBlink( hero, _myTower ) ){
