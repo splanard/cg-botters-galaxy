@@ -70,19 +70,21 @@ for( var i = 0; i < itemCount; i++ ){
 			_potions.mana.push( item );
 		}
 	}
-	
-	// LaneRange needs full damage and mana / mana regen (for Ironman's skills)
-	if( item.damage > 0 || item.mana > 0 || item.manaRegeneration > 0 ){
-		_itemSets.laneRange.push( item.name );
-	}
-	// HulkFarmer needs damage, health, maxHealth and moveSpeed
-	var farmerScore = 0;
-	if( item.damage > 0 ){ farmerScore++; }
-	if( item.health > 0 ){ farmerScore++; }
-	if( item.maxHealth > 0 ){ farmerScore++; }
-	if( item.moveSpeed > 0 ){ farmerScore++; }
-	if( farmerScore >= 2 ){
-		_itemSets.hulkFarmer.push( item.name );
+	// Other items
+	else {
+		// LaneRange needs full damage and mana / mana regen (for Ironman's skills)
+		if( item.damage > 0 || item.mana > 0 || item.manaRegeneration > 0 ){
+			_itemSets.laneRange.push( item.name );
+		}
+		// HulkFarmer needs damage, health, maxHealth and moveSpeed
+		var farmerScore = 0;
+		if( item.damage > 0 ){ farmerScore++; }
+		if( item.health > 0 ){ farmerScore++; }
+		if( item.maxHealth > 0 ){ farmerScore++; }
+		if( item.moveSpeed > 0 ){ farmerScore++; }
+		if( farmerScore >= 2 ){
+			_itemSets.hulkFarmer.push( item.name );
+		}
 	}
 	
 	_items[item.name] = item;
@@ -417,8 +419,9 @@ function hulkFarmer( heroIdx ){
 		for( var i=0; i < _neutrals.length; i++ ){
 			var neutral = _units[_neutrals[i]];
 			var win = winner( neutral, hero );
-			if( neutral.x <= _myFront && distance( neutral, _enemyTower ) > _enemyTower.attackRange // neutral position
-					&& win.id === hero.id && win.health > HEALTH_LEVEL_BACK ){ // fight issue
+			if( neutral.x <= _myFront + 200  // do not go too far inside enemy side
+					&& distance( neutral, _enemyTower ) > _enemyTower.attackRange // do not approach  enemy tower
+					&& win.id === hero.id && win.health > HEALTH_LEVEL_BACK ){ // check fight issue
 				target = neutral;
 				break;
 			}
