@@ -37,7 +37,7 @@ for( var i = 0; i < bushAndSpawnPointCount; i++ ){
 
 // ITEMS INPUT
 var _itemSets = {
-	'farmer': [],
+	'hulkFarmer': [],
 	'laneRange': []
 };
 var _potions = {
@@ -71,17 +71,18 @@ for( var i = 0; i < itemCount; i++ ){
 		}
 	}
 	
-	// LaneRange role needs full damage and mana / mana regen (for Ironman's skills)
+	// LaneRange needs full damage and mana / mana regen (for Ironman's skills)
 	if( item.damage > 0 || item.mana > 0 || item.manaRegeneration > 0 ){
 		_itemSets.laneRange.push( item.name );
 	}
-	// Farmer role needs damage, moveSpeed and health
+	// HulkFarmer needs damage, health, maxHealth and moveSpeed
 	var farmerScore = 0;
 	if( item.damage > 0 ){ farmerScore++; }
 	if( item.health > 0 ){ farmerScore++; }
+	if( item.maxHealth > 0 ){ farmerScore++; }
 	if( item.moveSpeed > 0 ){ farmerScore++; }
 	if( farmerScore >= 2 ){
-		_itemSets.farmer.push( item.name );
+		_itemSets.hulkFarmer.push( item.name );
 	}
 	
 	_items[item.name] = item;
@@ -93,7 +94,7 @@ _potions.mana.sort( function(a, b){ return a.mana - b.mana; } );
 
 // Sort item sets by asc cost
 _itemSets.laneRange.sort( sortItemsByCostAsc );
-_itemSets.farmer.sort( sortItemsByCostAsc );
+_itemSets.hulkFarmer.sort( sortItemsByCostAsc );
 
 //printErr( stringify( _items ) );
 
@@ -304,12 +305,12 @@ while( true ){
 					hero.enemyUnitsCanAggro.push( enemy.id );
 				}
 				// Enemy hero threatening mine
-				if( enemy.unitType === 'HERO' && willBeAtRange( hero, enemy ) ){
+				if( enemy.unitType === 'HERO' && d <= enemy.attackRange ){
 					hero.threateningHeroes.push( enemy.id );
 				}
 				
 				// Hero-specific distance checks
-				if( hero.name === 'HULK' && d <= 500 ){
+				if( hero.name === 'HULK' && enemy.unitType === 'HERO' && d <= 500 ){
 					hero.atChargeRange.push( enemy.id );
 					if( d <= 150 ){ hero.atBashRange.push( enemy.id ); }
 				}
@@ -345,7 +346,7 @@ while( true ){
 		}
 		else if( _round === -1 ){
 			hero = 'HULK';
-			_roles[hero] = farmer;
+			_roles[hero] = hulkFarmer;
 		}
 		print( hero );
 		
@@ -370,78 +371,83 @@ while( true ){
 // Roles function
 
 /*
- * Farmer: hero who go to spawn points to farm neutral units.
+ * HulkFarmer: Hulk who go to spawn points to farm neutral units.
  */
-function farmer( heroIdx ){
+function hulkFarmer( heroIdx ){
 	var hero = _myHeroes[heroIdx];
 	//printErr( '> ' + hero.name );
 	
 	// Role conf
-	var HEALTH_LEVEL_POTION = 500;
+	var HEALTH_LEVEL_BACK = 250;
+	var HEALTH_RATIO_POTION = 0.5;
 	
 	// Order spawn points by distance from my tower
 	_spawnPoints.sort( function(a, b){ return distance( _myTower, a ) - distance( _myTower, b ); } );
 	
 	// ---
-	// Buy health potion if needed
-	if( hero.health < HEALTH_LEVEL_POTION 
-			&& _gold >= _potions.health[1].cost ){
-		buy( _potions.health[1] );
-	}
-	// ---
-    // Fall back ? Items ?
-	else if( genFallback( hero, HEALTH_LEVEL_POTION, false )
-			|| genItems( hero, 'farmer' ) ){
+	// My tower is under attack: go back to base
+	if( _myTower.underAttack ){
+		back();
 		return;
 	}
 	// ---
-	// My tower is under attack: go back to base
-	else if( _myTower.underAttack ){
-		back();
+    // Fall back ? Health potion ? Items ?
+	if( genHealthPotion( hero, hero.maxHealth * HEALTH_RATIO_POTION )
+			|| genFallback( hero, HEALTH_LEVEL_BACK, false )
+			|| genItems( hero, 'hulkFarmer' ) ){
+		return;
 	}
-	// Enemy hero at range and alone: if I would win, fight!
-	else if( hero.enemyHeroesAtRange.length > 0
-			&& hero.threateningHeroes.length <= 1
-			&& hero.enemyUnitsCanAggro.length === 0 
-			&& winner( hero, _units[hero.enemyHeroesAtRange[0]] ).id === hero.id ){
-		attack( hero.enemyHeroesAtRange[0] );
-	}
-	// Unit at range: fight
-	else if( hero.neutralUnitsAtRange.length > 0 ){
-		if( hulkExplosiveShield( hero ) ){
-			return;
+	// Do not engage too much enemies at the same time without shield
+	if( hero.shield === 0 && hero.underAttack 
+			&& ( hero.threateningHeroes.length === 2 || hero.threateningHeroes.length + hero.threateningUnits.length >= 4 ) ){
+		if( !hulkExplosiveShield( hero ) ){
+			back();
 		}
-		else {
-			attack( hero.neutralUnitsAtRange[0] );
-		}
+		return;
 	}
-	else if( hero.enemyUnitsAtRange.length > 0 ){
-		attack( hero.enemyUnitsAtRange[0] );
+	// Farmer first !
+	if( hero.neutralUnitsAtRange.length > 0 ){
+		hulkShieldAndAttack( hero, hero.neutralUnitsAtRange[0] );
+		return;
 	}
 	// Neutrals between my tower and my front line: check if my hero can beat them
-	else if( hero.health > HEALTH_LEVEL_POTION && _neutrals.length > 0 ){
+	if( hero.health > HEALTH_LEVEL_BACK && _neutrals.length > 0 ){
 		_neutrals.sort( function(a, b){ return distance(_units[a], hero) - distance(_units[b], hero); } );
 		var target;
 		for( var i=0; i < _neutrals.length; i++ ){
 			var neutral = _units[_neutrals[i]];
 			var win = winner( neutral, hero );
 			if( neutral.x <= _myFront && distance( neutral, _enemyTower ) > _enemyTower.attackRange // neutral position
-					&& win.id === hero.id && win.health > HEALTH_LEVEL_POTION ){ // fight issue
+					&& win.id === hero.id && win.health > HEALTH_LEVEL_BACK ){ // fight issue
 				target = neutral;
 				break;
 			}
 		}
 		if( target ){
 			moveSafe( target.x, target.y );
-		}
-		else {
-			moveSafe( _myFront, _myTower.y );
+			return;
 		}
 	}
-	// Move to the front line
-	else {
-		moveSafe( _myFront, _myTower.y );
+	// Check bash or charge conditions
+	if( hulkBash( hero ) || hulkCharge( hero ) ){
+		return;
 	}
+	// Enemy hero at range and alone: if I would win, fight!
+	if( hero.enemyHeroesAtRange.length > 0
+			&& hero.threateningHeroes.length <= 1
+			&& hero.enemyUnitsCanAggro.length === 0 
+			&& winner( hero, _units[hero.enemyHeroesAtRange[0]] ).id === hero.id ){
+		hulkShieldAndAttack( hero, hero.enemyHeroesAtRange[0] );
+		return;
+	}
+	// Unit at range: fight
+	if( hero.enemyUnitsAtRange.length > 0 ){
+		hulkShieldAndAttack( hero, hero.enemyUnitsAtRange[0] );
+		return;
+	}
+	
+	// Else, move to the front line
+	moveSafe( _myFront, _myTower.y );
 }
 
 /*
@@ -465,14 +471,9 @@ function laneRange( heroIdx ){
 	};
 	
 	// ---
-	// Buy health potion if needed
-	if( hero.health < hero.maxHealth * HEALTH_RATIO_POTION 
-			&& _gold >= _potions.health[0].cost ){
-		buy( _potions.health[0] );
-	}
-	// ---
-    // Fall back ? Items ? IRONMAN Fireball ?
-	else if( genFallback( hero, hero.maxHealth * HEALTH_RATIO_BACK, true )
+    // Health potion ? Fall back ? Items ? IRONMAN skills ?
+	if( genHealthPotion( hero, hero.maxHealth * HEALTH_RATIO_POTION )
+			|| genFallback( hero, hero.maxHealth * HEALTH_RATIO_BACK, true )
 			|| genItems( hero, 'laneRange' )
 			|| ironmanFireball( hero )
 			|| ironmanBurning( hero ) ){
@@ -480,28 +481,30 @@ function laneRange( heroIdx ){
 	}
 	// ---
 	// Move the hero in battle position: just behind the front line but far enough from the enemy tower
-	else if( distance( hero, battlePosition ) > 50 
+	if( distance( hero, battlePosition ) > 50 
 			&& distance( battlePosition, _enemyTower ) > _enemyTower.attackRange ){
-		if( ironmanBlink( hero, battlePosition ) ){
-			return;
-		} else {
+		if( !ironmanBlink( hero, battlePosition ) ){
 			move( battlePosition.x, battlePosition.y );
 		}
+		return;
 	}
 	// Enemy hero at range and no units can aggro: attack
-	else if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length === 0 ){
+	if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length === 0 ){
 		attack( hero.enemyHeroesAtRange[0] );
+		return;
 	}
 	// If a unit at range: attack
-	else if( hero.enemyUnitsAtRange.length > 0 ){
+	if( hero.enemyUnitsAtRange.length > 0 ){
 		attack( hero.enemyUnitsAtRange[0] );
+		return;
 	}
 	// Else, wait
-	else {
-		wait();
-	}
+	wait();
 }
 
+/*
+ * Generic function for fall back conditions
+ */
 function genFallback( hero, healthLevel, fallBackWhenUnderAttack ){
 	// If my hero is weak or under attack: fall back if possible or fight.
 	if( hero.health < healthLevel || (fallBackWhenUnderAttack && hero.underAttack) ){
@@ -540,6 +543,9 @@ function genFallback( hero, healthLevel, fallBackWhenUnderAttack ){
 	return false;
 }
 
+/*
+ * Generic function for items upgrades
+ */
 function genItems( hero, itemSet ){
 	// Next item to buy
 	var nextItem = _items[_itemSets[itemSet][_myItems[hero.name].maxRank + 1]];
@@ -560,18 +566,80 @@ function genItems( hero, itemSet ){
 	return false;
 }
 
-// Skills algo functions
-
-function hulkBash( hero, target ){
-	if( hero.name === 'HULK' && _cooldowns.BASH === 0 && hero.mana >= 40 ){
-		// TODO!
+/*
+ * Generic function for potion buying
+ */
+function genHealthPotion( hero, healthLevelPotion ){
+	if( hero.health < healthLevelPotion ){
+		for( var i=_potions.health.length - 1; i >= 0; i-- ){
+			if( _gold >= _potions.health[i].cost && _potions.health[i].health <= hero.maxHealth - hero.health ){
+				buy( _potions.health[i] );
+				return true;
+			}
+		}
 	}
+	return false;
 }
 
-function hulkCharge( hero, target ){
-	if( hero.name === 'HULK' && _cooldowns.CHARGE === 0 && hero.mana >= 20 ){
-		// TODO!
+// Skills algo functions
+
+function hulkBash( hero ){
+	if( hero.name === 'HULK' && _cooldowns.BASH === 0 && hero.mana >= 40 && hero.atBashRange.length > 0 ){
+		hero.atBashRange.sort( sortByHealthAsc );
+		if( hero.enemyUnitsCanAggro.length <= 2 ){
+			bash( hero.atBashRange[0] );
+			return true;
+		}
 	}
+	return false;
+}
+
+function hulkCharge( hero ){
+	if( hero.name === 'HULK' && _cooldowns.CHARGE === 0 && hero.mana >= 20 && hero.atChargeRange.length > 0 ){
+		// Skill conf
+		var AGGRO_MAX = 2;
+		
+		var targets = [];
+		
+		for( var i=0; i < hero.atChargeRange.length; i++ ){
+			var pTarget = _units[hero.atChargeRange[i]];
+			
+			// Only charge near the tower for a killing blow
+			if( distance( pTarget, _enemyTower ) > _enemyTower.attackRange || hero.attackDamage >= pTarget.health ){
+				// For each potential target, search for units around who can aggro
+				var aggro = 0;
+				for( var i=0; i < _enemies.length; i++ ){
+					var unit = _units[_enemies[i]];
+					if( unit.unitType === 'UNIT' && distance( pTarget, unit ) <= AGGRO_DISTANCE ){
+						aggro++;
+					}
+				}
+				if( aggro <= AGGRO_MAX ){
+					targets.push( pTarget.id );
+				}
+			}
+		}
+		
+		if( targets.length > 0 ){
+			targets.sort( sortByHealthAsc );
+			charge( targets[0] );
+			return true;
+		}
+	}
+	return false;
+}
+
+function hulkShieldAndAttack( hero, unitId ){
+	if( hero.name === 'HULK' ){
+		if( hero.shield === 0 && _cooldowns.EXPLOSIVE_SHIELD === 0 && hero.mana >= 30 ){
+			explosiveShield();
+		}
+		else {
+			attack( unitId );
+		}
+		return true;
+	}
+	return false;
 }
 
 function hulkExplosiveShield( hero ){
@@ -590,7 +658,8 @@ function ironmanBlink( hero, dest ){
 		// For now, just using it to move faster regaining mana
 		var d = distance( hero, { 'x': dest.x, 'y': dest.y } );
 		if( d >= RANGE ){
-			blink( hero.x + ( dest.x - hero.x ) * RANGE / d, hero.y + ( dest.y - hero.y ) * RANGE / d );
+			blink( Math.trunc(hero.x + ( dest.x - hero.x ) * RANGE / d), 
+					Math.trunc(hero.y + ( dest.y - hero.y ) * RANGE / d) );
 			return true;
 		}
 	}
