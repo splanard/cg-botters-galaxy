@@ -255,26 +255,6 @@ while( true ){
 				if( u.x < _enemyFront ){
 					_enemyFront = u.x;
 				}
-				
-				// Interactions with my heroes
-				/*
-				for( var hid=0; hid < _myHeroes.length; hid++ ){
-					var hero = _myHeroes[hid];
-					var d = distance( hero, u );
-					// unit at attack range of my hero
-					if( isAtRange( u, hero ) ){
-						hero.enemyUnitsAtRange.push( u.id );
-					}
-					// unit threatening my hero
-					if( isAtRange( hero, u ) ){
-						hero.threateningUnits.push( u.id );
-					}
-					// unit which can aggro my hero
-					if( d <= AGGRO_DISTANCE ){
-						hero.enemyUnitsCanAggro.push( u.id );
-					}
-				}
-				*/
 			}
 		}
 		
