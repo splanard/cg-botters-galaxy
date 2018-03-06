@@ -413,6 +413,7 @@ function hulkFarmer( heroIdx ){
 		}
 		return;
 	}
+	
 	// Ambush
 	if( hulkAmbush( hero ) ){ return; }
 	/*
@@ -599,12 +600,12 @@ function genFarm( hero, healthLimit, beforeAttack ){
 	}
 	// Neutrals between my tower and my front line: check if my hero can beat them
 	if( _neutrals.length > 0 ){
-		_neutrals.sort( function(a, b){ return distance(_units[a], _myTower) - distance(_units[b], _myTower); } );
+		_neutrals.sort( function(a, b){ return distance(_units[a], hero) - distance(_units[b], hero); } );
 		var target;
 		for( var i=0; i < _neutrals.length; i++ ){
 			var neutral = _units[_neutrals[i]];
 			var win = winner( neutral, hero );
-			if( neutral.x <= _myFront  // do not go too far inside enemy side
+			if( neutral.x <= Math.min( 1200, _myFront )  // do not go too far inside enemy side
 					&& neutral.id !== notThisOne
 					&& distance( neutral, _enemyTower ) > _enemyTower.attackRange // do not approach enemy tower
 					&& win.id === hero.id && win.health > healthLimit ){ // check fight issue
