@@ -301,7 +301,7 @@ while( true ){
 				}
 				
 				// Hero-specific distance checks
-				if( hero.name === 'HULK' && enemy.unitType === 'HERO' && d <= 500 ){
+				if( hero.name === 'HULK' && enemy.unitType === 'HERO' && d <= 300 ){
 					hero.atChargeRange.push( enemy.id );
 					if( d <= 150 ){ hero.atBashRange.push( enemy.id ); }
 				}
@@ -638,7 +638,7 @@ function hulkCharge( hero ){
 			var pTarget = _units[hero.atChargeRange[i]];
 			
 			// Only charge near the tower for a killing blow
-			if( distance( pTarget, _enemyTower ) > _enemyTower.attackRange || hero.attackDamage >= pTarget.health ){
+			if( distance( pTarget, _enemyTower ) > _enemyTower.attackRange || hero.attackDamage * 0.5 >= pTarget.health ){
 				// For each potential target, search for units around who can aggro
 				var aggro = 0;
 				for( var i=0; i < _enemies.length; i++ ){
@@ -708,7 +708,7 @@ function ironmanBurning( hero ){
 		var SCORE_LAST_HIT = 2;
 		var SCORE_LIMIT = 5;
 		
-		var damage = hero.manaRegeneration * 3 + 30;
+		var damage = hero.manaRegeneration * 5 + 30;
 				
 		var targets = [];
 		
