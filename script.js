@@ -762,7 +762,7 @@ function hulkCharge( hero ){
 			var pTarget = _units[hero.atChargeRange[i]];
 			
 			// Only charge near the tower for a killing blow
-			if( distance( pTarget, _enemyTower ) > _enemyTower.attackRange || hero.attackDamage >= pTarget.health ){
+			if( distance( pTarget, _enemyTower ) > _enemyTower.attackRange || hero.attackDamage * 0.5 >= pTarget.health ){
 				// For each potential target, search for units around who can aggro
 				var aggro = 0;
 				for( var i=0; i < _enemies.length; i++ ){
