@@ -78,11 +78,12 @@ for( var i = 0; i < itemCount; i++ ){
 		}
 		// HulkFarmer needs damage, health, maxHealth and moveSpeed
 		var farmerScore = 0;
-		if( item.damage > 0 ){ farmerScore++; }
-		if( item.health > 0 ){ farmerScore++; }
-		if( item.maxHealth > 0 ){ farmerScore++; }
-		if( item.moveSpeed > 0 ){ farmerScore++; }
-		if( farmerScore >= 2 ){
+//		if( item.damage > 0 ){ farmerScore++; }
+//		if( item.health > 0 ){ farmerScore++; }
+//		if( item.maxHealth > 0 ){ farmerScore++; }
+//		if( item.moveSpeed > 0 ){ farmerScore++; }
+//		if( farmerScore >= 2 ){
+		if( item.man > 0 )
 			_itemSets.hulkFarmer.push( item.name );
 		}
 	}
@@ -107,6 +108,12 @@ var _cooldowns = {};
 for( var i=0; i < _skills.length; i++ ){
 	_cooldowns[_skills[i]] = 0;
 }
+var _combos = {
+	'HULK_AMBUSH': {
+		'step': -1,
+		'arg': undefined
+	}
+};
 
 // GAME LOOP
 var _round = -2;
@@ -301,7 +308,7 @@ while( true ){
 				}
 				
 				// Hero-specific distance checks
-				if( hero.name === 'HULK' && enemy.unitType === 'HERO' && d <= 500 ){
+				if( hero.name === 'HULK' && enemy.unitType === 'HERO' && d <= 300 ){
 					hero.atChargeRange.push( enemy.id );
 					if( d <= 150 ){ hero.atBashRange.push( enemy.id ); }
 				}
@@ -405,6 +412,7 @@ function hulkFarmer( heroIdx ){
 		}
 		return;
 	}
+	/*
 	// Farmer first !
 	if( hero.neutralUnitsAtRange.length > 0 ){
 		hulkShieldAndAttack( hero, hero.neutralUnitsAtRange[0] );
@@ -429,6 +437,9 @@ function hulkFarmer( heroIdx ){
 			return;
 		}
 	}
+	*/
+	if( hulkAmbush( hero ) ){ return; }
+	/*
 	// Check bash or charge conditions
 	if( hulkBash( hero ) || hulkCharge( hero ) ){
 		return;
@@ -446,9 +457,15 @@ function hulkFarmer( heroIdx ){
 		hulkShieldAndAttack( hero, hero.enemyUnitsAtRange[0] );
 		return;
 	}
+	*/
+   // Unit at range: fight
+	if( hero.enemyUnitsAtRange.length > 0 ){
+		attack( hero.enemyUnitsAtRange[0] );
+		return;
+	}
 	
 	// Else, move to the front line
-	moveSafe( _myFront, hero.laneY );
+	moveSafe( _enemyFront - 100, _myTower.y - Math.sqrt( 300*300 - 150*150 ) );
 }
 
 /*
@@ -616,6 +633,113 @@ function genItems( hero, itemSet ){
 
 // Skills algo functions
 
+function hulkAmbush( hero ){
+	if( hero.name === 'HULK' ){
+		printErr('Ambush evaluation...');
+		printErr('  mana: ' + hero.mana);
+		// Skill conf
+		var AGGRO_MAX = 3;
+		var BASH_MANA_COST = 40;
+		var BASH_RANGE = 150;
+		var CHARGE_MANA_COST = 20;
+		var CHARGE_RANGE = 300;
+		var SHIELD_MANA_COST = 30;
+				
+		var combo = _combos.HULK_AMBUSH;
+		// Combo already started: continue
+		if( combo.step >= 0 ){
+			printErr('Combo started');
+			var end = false;
+			var target = _units[combo.arg];
+			var d = distance( target, hero );
+			printErr('Target [' + target.id + ']: d=' + d + ', health=' + target.health);
+			switch( combo.step ){
+				// Charge!
+				case 0:
+					// Verify skill conditions, then charge
+					if( d <= CHARGE_RANGE && _cooldowns.CHARGE === 0 && hero.mana >= CHARGE_MANA_COST ){
+						charge( combo.arg ); return true;
+					} else {
+						end = true;	// Abort
+					}
+					break;
+				
+				// Bash!
+				case 1: 
+					// Verify skill conditions, then bash
+					if( d <= BASH_RANGE && _cooldowns.BASH === 0 && hero.mana >= BASH_MANA_COST ){
+						bash( combo.arg ); return true;
+					} else {
+						end = true; // Abort
+					}
+					break;
+				
+				// Attack or MoveAttack
+				case 2:
+					if( d <= hero.attackRange ){
+						attack( combo.arg ); return true;
+					}
+					else if( d <= (1 - hero.attackSpeed) * hero.movementSpeed + hero.attackRange ){
+						var ratio = (1 - hero.attackSpeed) * hero.movementSpeed / d;
+						var tX = Math.trunc( hero.x + ( target.x - hero.x ) * ratio );
+						var tY = Math.trunc( hero.y + ( target.y - hero.y ) * ratio );
+						moveAttack( tX, tY, target.id );
+						return true;
+					}
+					else {
+						end = true; // Abort
+					}
+					break;
+				
+				default:
+					end = true;
+			}
+			
+			// End combo (aborted or finished)
+			if( end ){
+				printErr( 'Combo end' );
+				combo.step = -1;
+				combo.arg = undefined;
+				back(); // TODO: improve end-combo action
+				return true;
+			}
+		}
+		// Combo start
+		else if( _cooldowns.EXPLOSIVE_SHIELD === 0 && _cooldowns.CHARGE === 0 && _cooldowns.BASH === 0 
+				&& hero.mana >= SHIELD_MANA_COST + CHARGE_MANA_COST + BASH_MANA_COST 
+				&& hero.atChargeRange.length > 0 ){
+			printErr('Check combo conditions');
+			var target;
+			for( var i=0; i < hero.atChargeRange.length; i++ ){
+				var pTarget = _units[hero.atChargeRange[i]];
+				if( pTarget.health <= 2.5 * hero.attackRange || pTarget.name === 'DOCTOR_STRANGE' ){
+					// Check units around who can aggro or other enemy heroes
+					var aggro = 0;
+					for( var j=0; j < _enemies.length; j++ ){
+						var unit = _units[_enemies[j]];
+						if( unit.unitType === 'UNIT' && distance( pTarget, unit ) <= AGGRO_DISTANCE ){
+							aggro++;
+						}
+						else if( unit.unitType === 'HERO' && distance( pTarget, unit ) <= unit.attackRange ){
+							aggro+=3;
+						}
+					}
+					if( aggro <= AGGRO_MAX ){
+						target = pTarget;
+					}
+				}
+			}
+			if( target ){
+				printErr('Ambush !!');
+				combo.step = 0;
+				combo.arg = target.id;
+				explosiveShield(); return true;
+			}
+		}
+	}
+	return false;
+}
+
 function hulkBash( hero ){
 	if( hero.name === 'HULK' && _cooldowns.BASH === 0 && hero.mana >= 40 && hero.atBashRange.length > 0 ){
 		hero.atBashRange.sort( sortByHealthAsc );
@@ -708,7 +832,7 @@ function ironmanBurning( hero ){
 		var SCORE_LAST_HIT = 2;
 		var SCORE_LIMIT = 5;
 		
-		var damage = hero.manaRegeneration * 3 + 30;
+		var damage = hero.manaRegeneration * 5 + 30;
 				
 		var targets = [];
 		
