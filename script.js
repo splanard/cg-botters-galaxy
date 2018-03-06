@@ -83,7 +83,7 @@ for( var i = 0; i < itemCount; i++ ){
 //		if( item.maxHealth > 0 ){ farmerScore++; }
 //		if( item.moveSpeed > 0 ){ farmerScore++; }
 //		if( farmerScore >= 2 ){
-		if( item.man > 0 ){
+		if( item.mana > 0 ){
 			_itemSets.hulkFarmer.push( item.name );
 		}
 	}
@@ -387,6 +387,7 @@ function hulkFarmer( heroIdx ){
 	// Role conf
 	var HEALTH_LEVEL_BACK = 250;
 	var HEALTH_RATIO_POTION = 0.5;
+	var ITEMS_SET = 'hulkFarmer';
 	
 	// Order spawn points by distance from my tower
 	_spawnPoints.sort( function(a, b){ return distance( _myTower, a ) - distance( _myTower, b ); } );
@@ -401,7 +402,7 @@ function hulkFarmer( heroIdx ){
     // Fall back ? Health potion ? Items ?
 	if( genFallback( hero, hero.health < HEALTH_LEVEL_BACK )
 			|| genHealthPotion( hero, hero.maxHealth * HEALTH_RATIO_POTION )
-			|| genItems( hero, 'hulkFarmer' ) ){
+			|| genItems( hero, ITEMS_SET ) ){
 		return;
 	}
 	// Do not engage too much enemies at the same time without shield
@@ -412,36 +413,13 @@ function hulkFarmer( heroIdx ){
 		}
 		return;
 	}
-	/*
-	// Farmer first !
-	if( hero.neutralUnitsAtRange.length > 0 ){
-		hulkShieldAndAttack( hero, hero.neutralUnitsAtRange[0] );
-		return;
-	}
-	// Neutrals between my tower and my front line: check if my hero can beat them
-	if( _neutrals.length > 0 ){
-		_neutrals.sort( function(a, b){ return distance(_units[a], hero) - distance(_units[b], hero); } );
-		var target;
-		for( var i=0; i < _neutrals.length; i++ ){
-			var neutral = _units[_neutrals[i]];
-			var win = winner( neutral, hero );
-			if( neutral.x <= _myFront  // do not go too far inside enemy side
-					&& distance( neutral, _enemyTower ) > _enemyTower.attackRange // do not approach  enemy tower
-					&& win.id === hero.id && win.health > HEALTH_LEVEL_BACK ){ // check fight issue
-				target = neutral;
-				break;
-			}
-		}
-		if( target ){
-			moveSafe( target.x, target.y );
-			return;
-		}
-	}
-	*/
+	// Ambush
 	if( hulkAmbush( hero ) ){ return; }
 	/*
-	// Check bash or charge conditions
-	if( hulkBash( hero ) || hulkCharge( hero ) ){
+	// Farm, bash or charge
+	if( genFarm( hero, HEALTH_LEVEL_BACK, hulkExplosiveShield ) 
+			|| hulkBash( hero ) 
+			|| hulkCharge( hero ) ){
 		return;
 	}
 	// Enemy hero at range and alone: if I would win, fight!
@@ -458,7 +436,7 @@ function hulkFarmer( heroIdx ){
 		return;
 	}
 	*/
-   // Unit at range: fight
+    // Unit at range: fight
 	if( hero.enemyUnitsAtRange.length > 0 ){
 		attack( hero.enemyUnitsAtRange[0] );
 		return;
@@ -589,6 +567,54 @@ function genFallback( hero, fallbackCondition ){
 			}
 		}
 		return true;
+	}
+	return false;
+}
+
+/*
+ * Generic function for farming neutral units
+ */
+function genFarm( hero, healthLimit, beforeAttack ){
+	var notThisOne = -1;
+	// Farm neutral unit at range
+	if( hero.neutralUnitsAtRange.length > 0 ){
+		var neutral = _units[hero.neutralUnitsAtRange[0]];
+		var win = winner( hero, neutral );
+		if( win.id === hero.id && win.health > healthLimit // my hero will win this fight
+				&& hero.threateningUnits.length + hero.threateningHeroes.length === 0 ){ // No enemies around
+			if( neutral.health === neutral.maxHealth 
+					&& beforeAttack( hero ) ){ // neutral has not yet been attacked. So not hostile (can be improved...)
+				return true;
+			}
+			else {
+				attack( hero.neutralUnitsAtRange[0] ); return true;
+			}
+		}
+		else if( win.id !== hero.id || win.health <= healthLimit ){
+			notThisOne = neutral.id;
+		}
+		else if( hero.threateningUnits.length + hero.threateningHeroes.length > 0 ){
+			back(); return true;
+		}
+	}
+	// Neutrals between my tower and my front line: check if my hero can beat them
+	if( _neutrals.length > 0 ){
+		_neutrals.sort( function(a, b){ return distance(_units[a], _myTower) - distance(_units[b], _myTower); } );
+		var target;
+		for( var i=0; i < _neutrals.length; i++ ){
+			var neutral = _units[_neutrals[i]];
+			var win = winner( neutral, hero );
+			if( neutral.x <= _myFront  // do not go too far inside enemy side
+					&& neutral.id !== notThisOne
+					&& distance( neutral, _enemyTower ) > _enemyTower.attackRange // do not approach enemy tower
+					&& win.id === hero.id && win.health > healthLimit ){ // check fight issue
+				target = neutral;
+				break;
+			}
+		}
+		if( target ){
+			moveSafe( target.x, target.y ); return true;
+		}
 	}
 	return false;
 }
