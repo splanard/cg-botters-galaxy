@@ -215,6 +215,7 @@ while( true ){
 				
 				// Hero-specific targets lists
 				if( u.name === 'HULK' ){
+					u.atAmbushRange = [];
 					u.atBashRange = [];
 					u.atChargeRange = [];
 				}
@@ -310,6 +311,7 @@ while( true ){
 				// Hero-specific distance checks
 				if( hero.name === 'HULK' && enemy.unitType === 'HERO' && d <= 300 ){
 					hero.atChargeRange.push( enemy.id );
+					if( d <= 200 ){ hero.atAmbushRange.push( enemy.id ); }
 					if( d <= 150 ){ hero.atBashRange.push( enemy.id ); }
 				}
 				if( hero.name === 'IRONMAN' && d <= 250 ){
@@ -444,7 +446,8 @@ function hulkFarmer( heroIdx ){
 	}
 	
 	// Else, move to the front line
-	moveSafe( _enemyFront - 100, _myTower.y - Math.sqrt( 300*300 - 150*150 ) );
+	moveSafe( _myFront - 10, _myTower.y - 150 );
+	//moveSafe( _enemyFront - 100, _myTower.y - Math.sqrt( 300*300 - 150*150 ) );
 }
 
 /*
@@ -663,9 +666,9 @@ function genItems( hero, itemSet ){
 function hulkAmbush( hero ){
 	if( hero.name === 'HULK' ){
 		printErr('Ambush evaluation...');
-		printErr('  mana: ' + hero.mana);
+		printErr('  Mana: ' + hero.mana);
 		// Skill conf
-		var AGGRO_MAX = 3;
+		var AGGRO_MAX = 7;
 		var BASH_MANA_COST = 40;
 		var BASH_RANGE = 150;
 		var CHARGE_MANA_COST = 20;
@@ -673,6 +676,8 @@ function hulkAmbush( hero ){
 		var SHIELD_MANA_COST = 30;
 				
 		var combo = _combos.HULK_AMBUSH;
+		printErr('  Combo: ' + stringify( combo ));
+		printErr('  At range: ' + hero.atAmbushRange );
 		// Combo already started: continue
 		if( combo.step >= 0 ){
 			printErr('Combo started');
@@ -685,6 +690,7 @@ function hulkAmbush( hero ){
 				case 0:
 					// Verify skill conditions, then charge
 					if( d <= CHARGE_RANGE && _cooldowns.CHARGE === 0 && hero.mana >= CHARGE_MANA_COST ){
+						combo.step++;
 						charge( combo.arg ); return true;
 					} else {
 						end = true;	// Abort
@@ -695,6 +701,7 @@ function hulkAmbush( hero ){
 				case 1: 
 					// Verify skill conditions, then bash
 					if( d <= BASH_RANGE && _cooldowns.BASH === 0 && hero.mana >= BASH_MANA_COST ){
+						combo.step++;
 						bash( combo.arg ); return true;
 					} else {
 						end = true; // Abort
@@ -704,14 +711,15 @@ function hulkAmbush( hero ){
 				// Attack or MoveAttack
 				case 2:
 					if( d <= hero.attackRange ){
+						combo.step++;
 						attack( combo.arg ); return true;
 					}
 					else if( d <= (1 - hero.attackSpeed) * hero.movementSpeed + hero.attackRange ){
 						var ratio = (1 - hero.attackSpeed) * hero.movementSpeed / d;
 						var tX = Math.trunc( hero.x + ( target.x - hero.x ) * ratio );
 						var tY = Math.trunc( hero.y + ( target.y - hero.y ) * ratio );
-						moveAttack( tX, tY, target.id );
-						return true;
+						moveAttack( tX, tY, target.id ); return true;
+						combo.step++;
 					}
 					else {
 						end = true; // Abort
@@ -727,30 +735,34 @@ function hulkAmbush( hero ){
 				printErr( 'Combo end' );
 				combo.step = -1;
 				combo.arg = undefined;
-				back(); // TODO: improve end-combo action
+				moveSafe( _myFront - 10, _myTower.y - 150 );
 				return true;
 			}
 		}
 		// Combo start
 		else if( _cooldowns.EXPLOSIVE_SHIELD === 0 && _cooldowns.CHARGE === 0 && _cooldowns.BASH === 0 
-				&& hero.mana >= SHIELD_MANA_COST + CHARGE_MANA_COST + BASH_MANA_COST 
-				&& hero.atChargeRange.length > 0 ){
+				&& hero.mana >= SHIELD_MANA_COST + CHARGE_MANA_COST + BASH_MANA_COST - 2 * hero.manaRegeneration
+				&& hero.atAmbushRange.length > 0 ){
 			printErr('Check combo conditions');
 			var target;
-			for( var i=0; i < hero.atChargeRange.length; i++ ){
-				var pTarget = _units[hero.atChargeRange[i]];
-				if( pTarget.health <= 2.5 * hero.attackRange || pTarget.name === 'DOCTOR_STRANGE' ){
+			for( var i=0; i < hero.atAmbushRange.length; i++ ){
+				var pTarget = _units[hero.atAmbushRange[i]];
+				printErr('Target[' + pTarget.id + ']');
+				if( true || pTarget.health <= 2.5 * hero.attackRange || pTarget.name === 'DOCTOR_STRANGE' ){
 					// Check units around who can aggro or other enemy heroes
 					var aggro = 0;
 					for( var j=0; j < _enemies.length; j++ ){
 						var unit = _units[_enemies[j]];
-						if( unit.unitType === 'UNIT' && distance( pTarget, unit ) <= AGGRO_DISTANCE ){
+						var d = distance( pTarget, unit );
+						printErr('  dist ' + pTarget.id + ' -> ' + unit.id + ' : ' + d);
+						if( pTarget.id !== unit.id && unit.unitType === 'UNIT' && d <= AGGRO_DISTANCE ){
 							aggro++;
 						}
-						else if( unit.unitType === 'HERO' && distance( pTarget, unit ) <= unit.attackRange ){
+						else if( pTarget.id !== unit.id && unit.unitType === 'HERO' && d <= unit.attackRange ){
 							aggro+=3;
 						}
 					}
+					printErr('  aggro = ' + aggro);
 					if( aggro <= AGGRO_MAX ){
 						target = pTarget;
 					}
