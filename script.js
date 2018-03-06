@@ -83,7 +83,7 @@ for( var i = 0; i < itemCount; i++ ){
 //		if( item.maxHealth > 0 ){ farmerScore++; }
 //		if( item.moveSpeed > 0 ){ farmerScore++; }
 //		if( farmerScore >= 2 ){
-		if( item.man > 0 )
+		if( item.man > 0 ){
 			_itemSets.hulkFarmer.push( item.name );
 		}
 	}
