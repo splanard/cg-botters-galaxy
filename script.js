@@ -226,7 +226,7 @@ while( true ){
 				u.allyUnitsAtRange = []; // IDs of all ally units at range 
 				
 				// Each hero its position on the lane so that they are not aligned while in the lane
-				u.laneY = _myTower.y - DISTANCE_FROM_LANE_CENTER + _myHeroes.length * 2 * DISTANCE_FROM_LANE_CENTER;
+				u.laneY = _myTower.y + DISTANCE_FROM_LANE_CENTER * (2 * _myHeroes.length - 1);
 				
 				// Hero-specific targets lists
 				if( u.name === 'HULK' ){
@@ -418,7 +418,7 @@ function hulkFarmer( heroIdx ){
 	// ---
 	// My tower is under attack: go back to base
 	if( _myTower.underAttack ){
-		back( _myTower.y );
+		back( hero );
 		return;
 	}
 	// ---
@@ -432,7 +432,7 @@ function hulkFarmer( heroIdx ){
 	if( hero.shield === 0 && hero.underAttack 
 			&& ( hero.threateningHeroes.length === 2 || hero.threateningHeroes.length + hero.threateningUnits.length >= 4 ) ){
 		if( !hulkExplosiveShield( hero ) ){
-			back( hero.laneY );
+			back( hero );
 		}
 		return;
 	}
@@ -568,7 +568,7 @@ function genFallback( hero, fallbackCondition ){
 			if( ironmanBlink( hero, _myTower ) ){
 				return true;
 			} else {
-				back( hero.laneY );
+				back( hero );
 			}
 		}
 		// My hero is already at the tower...
@@ -621,7 +621,7 @@ function genFarm( hero, healthLimit, beforeAttack ){
 			notThisOne = neutral.id;
 		}
 		else if( hero.threateningUnits.length + hero.threateningHeroes.length > 0 ){
-			back(); return true;
+			back( hero ); return true;
 		}
 	}
 	// Neutrals between my tower and my front line: check if my hero can beat them
@@ -846,8 +846,12 @@ function attackNearest( unitType ){
 	print('ATTACK_NEAREST ' + unitType);
 }
 
-function back( y ){
-	move( _myTower.x, y, 'Back!' );
+function back( hero ){
+	if( hero.x > _myFront.x ){
+		move( _myTower.x, hero.y, 'Back!' );
+	} else {
+		move( _myTower.x, hero.laneY, 'Back!' );
+	}
 }
 
 function buy( item ){
