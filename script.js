@@ -887,12 +887,12 @@ function moveSafe( x, y ){
 }
 
 function sell( item ){
-	print('SELL ' + item.name);
+	print('SELL ' + item.name + ";-" + item.name);
 	changeGold( item.cost );
 }
 
 function wait(){
-	print('WAIT');
+	print('WAIT;...');
 }
 
 // Skills actions functions
