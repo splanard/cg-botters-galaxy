@@ -9,6 +9,20 @@ var AGGRO_DISTANCE = 300;
 var DISTANCE_FROM_LANE_CENTER = 30;
 var LANE_HEIGHT = 300;
 var MAX_ITEMS = 4;
+var RANGES = {
+	'AOEHEAL': 250,
+	'BASH': 150,
+	'BLINK': 200,
+	'BURNING': 250,
+	'CHARGE': 300,
+	'COUNTER': 350,
+	'FIREBALL': 900,
+	'JUMP': 250,
+	'PULL': 400,
+	'SHIELD': 500,
+	'SPEARFLIP': 155,
+	'WIRE': 200
+}
 
 var _myTeam = parseInt(readline());
 
@@ -215,6 +229,9 @@ while( true ){
 					u.atBurningRange = [];
 				}
 				
+				// Hero-specific threats
+				u.atPullRange = false;
+				
 				// Is my hero under attack ?
 				u.underAttack = ( u.health < _previousState.myHeroes[_myHeroes.length].health );
 				
@@ -301,12 +318,17 @@ while( true ){
 				}
 				
 				// Hero-specific distance checks
-				if( hero.name === 'HULK' && enemy.unitType === 'HERO' && d <= 300 ){
+				if( hero.name === 'HULK' && enemy.unitType === 'HERO' && d <= RANGES.CHARGE ){
 					hero.atChargeRange.push( enemy.id );
-					if( d <= 150 ){ hero.atBashRange.push( enemy.id ); }
+					if( d <= RANGES.BASH ){ hero.atBashRange.push( enemy.id ); }
 				}
-				if( hero.name === 'IRONMAN' && d <= 250 ){
+				if( hero.name === 'IRONMAN' && d <= RANGES.BURNING ){
 					hero.atBurningRange.push( enemy.id );
+				}
+				if( enemy.unitType === 'HERO' && enemy.name === 'DOCTOR_STRANGE' 
+						&& enemy.mana >= 40
+						&& d <= RANGES.PULL ){
+					hero.atPullRange = true;
 				}
 			}
 			
@@ -452,6 +474,7 @@ function laneRange( heroIdx ){
 	
 	// Fallback ?
 	var fallback = ( hero.health < hero.maxHealth * HEALTH_RATIO_BACK 
+			|| hero.atPullRange
 			|| ( hero.underAttack && hero.threateningUnits.length + hero.threateningHeroes.length > 0 ) );
 	
 	// ---
@@ -713,7 +736,7 @@ function hulkExplosiveShield( hero ){
 function ironmanBlink( hero, dest ){
 	if( hero.name === 'IRONMAN' && _cooldowns.BLINK === 0 && hero.mana >= 16 ){
 		// Skill conf
-		var RANGE = 200;
+		var RANGE = RANGES.BLINK;
 		
 		// For now, just using it to move faster regaining mana
 		var d = distance( hero, { 'x': dest.x, 'y': dest.y } );
@@ -770,7 +793,7 @@ function ironmanFireball( hero ){
 	if( hero.name === 'IRONMAN' && _cooldowns.FIREBALL === 0 && hero.mana >= 60 ){
 		// Skill conf
 		var DAMAGE_MIN = 70;
-		var RANGE = 900;
+		var RANGE = RANGES.FIREBALL;
 		
 		var target;
 		for( var i=0; i < _enemyHeroes.length; i++ ){
