@@ -134,7 +134,7 @@ var _previousState = {
 while( true ){
     // Gold input
 	_gold = parseInt(readline());
-	_availableGold = _gold - _potions.health[0].cost;
+	_availableGold = _gold - 2 * _potions.health[0].cost;
     var enemyGold = parseInt(readline());
     
 	// Round type
@@ -517,7 +517,8 @@ function laneRange( heroIdx ){
 	}
 	// Enemy hero at range and no units can aggro: attack
 	if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length === 0 ){
-		attack( hero.enemyHeroesAtRange[0] );
+		//attack( hero.enemyHeroesAtRange[0] );
+		genRangeMoveAttack( hero, hero.enemyHeroesAtRange[0] );
 		return;
 	}
 	// If a unit at range and last hit: attack
@@ -529,7 +530,8 @@ function laneRange( heroIdx ){
 	if( genDeny( hero ) ){ return; }
 	// Unit at range: attack
 	if( hero.enemyUnitsAtRange.length > 0 ){
-		attack( hero.enemyUnitsAtRange[0] );
+		//attack( hero.enemyUnitsAtRange[0] );
+		genRangeMoveAttack( hero, hero.enemyUnitsAtRange[0] );
 		return;
 	}
 	// Else, wait
@@ -682,6 +684,23 @@ function genItems( hero, itemSet ){
 	}
 	
 	return false;
+}
+
+function genRangeMoveAttack( hero, targetId ){
+	var target = _units[targetId];
+	var maxDY = Math.trunc( hero.movementSpeed * ( 1 - hero.attackSpeed ) );
+	// Target is above
+	if( hero.y > target.y ){
+		moveAttack( hero.x, hero.y - Math.min( maxDY, hero.y - target.y ), targetId );
+	}
+	// Target is below
+	else if( hero.y < target.y ){
+		moveAttack( hero.x, hero.y + Math.min( maxDY, target.y - hero.y ), targetId );
+	}
+	// Target is on the same line
+	else {
+		attack( targetId );
+	}
 }
 
 // Skills algo functions
@@ -869,7 +888,7 @@ function move( x, y, msg ){
 }
 
 function moveAttack( x, y, unitId ){
-	print('MOVE_ATTACK ' + convertX(x) + ' ' + y + ' ' + unitId);
+	print('MOVE_ATTACK ' + convertX(x) + ' ' + y + ' ' + unitId + ';Move & attack');
 }
 
 function moveSafe( x, y ){
@@ -880,7 +899,7 @@ function moveSafe( x, y ){
 	}
 	else if( fromTower <= _enemyTower.attackRange ){
 		var ratio = (_enemyTower.attackRange + 1) / fromTower;
-		move( _enemyTower.x + ( x - _enemyTower.x ) * ratio, _enemyTower.y + ( y - _enemyTower.y ) );
+		move( Math.trunc(_enemyTower.x + ( x - _enemyTower.x ) * ratio), Math.trunc(_enemyTower.y + ( y - _enemyTower.y )) );
 	} else {
 		move( x, y );
 	}
