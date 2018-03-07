@@ -141,8 +141,16 @@ while( true ){
 	var roundType = parseInt(readline()); // a positive value will show the number of heroes that await a command
     
 	// Init battle fronts coordinates
-	_myFront = 100;
-	_enemyFront = 1820;
+	_myFront = {
+		'top': 520,
+		'bottom': 520,
+		'x': 100
+	};
+	_enemyFront = {
+		'top': 520,
+		'bottom': 520,
+		'x': 1820
+	};
 	
 	// Reduce cooldowns
 	for( var i=0; i < _skills.length; i++ ){
@@ -267,18 +275,18 @@ while( true ){
 				_allies.push( u.id );
 				
 				// Battle front
-				if( u.x > _myFront ){
-					_myFront = u.x;
-				}
+				_myFront.x = Math.max( _myFront.x, u.x );
+				_myFront.bottom = Math.max( _myFront.bottom, u.y );
+				_myFront.top = Math.min( _myFront.top, u.y );
 			}
 			// Enemy units...
 			else {
-				_enemies.push(u.id);
+				_enemies.push( u.id );
 				
 				// Battle front
-				if( u.x < _enemyFront ){
-					_enemyFront = u.x;
-				}
+				_enemyFront.x = Math.min( _enemyFront.x, u.x );
+				_enemyFront.bottom = Math.max( _enemyFront.bottom, u.y );
+				_enemyFront.top = Math.min( _enemyFront.top, u.y );
 			}
 		}
 		
@@ -449,7 +457,7 @@ function hulkFarmer( heroIdx ){
 	}
 	
 	// Else, move to the front line
-	moveSafe( _myFront - 10, hero.laneY );
+	moveSafe( _myFront.x - 10, hero.laneY );
 }
 
 /*
@@ -470,7 +478,7 @@ function laneRange( heroIdx ){
 	
 	// Battle position
 	var battlePosition = {
-		'x': Math.max( _myTower.x, Math.min( _myFront - MIN_DISTANCE_FROM_MY_FRONT, _enemyFront - distanceFromEnemyFront ) ),
+		'x': Math.max( _myTower.x, Math.min( _myFront.x - MIN_DISTANCE_FROM_MY_FRONT, _enemyFront.x - distanceFromEnemyFront ) ),
 		'y': hero.laneY
 	};
 	
@@ -623,7 +631,7 @@ function genFarm( hero, healthLimit, beforeAttack ){
 		for( var i=0; i < _neutrals.length; i++ ){
 			var neutral = _units[_neutrals[i]];
 			var win = winner( neutral, hero );
-			if( neutral.x <= Math.min( 1200, _myFront )  // do not go too far inside enemy side
+			if( neutral.x <= Math.min( 1200, _myFront.x )  // do not go too far inside enemy side
 					&& neutral.id !== notThisOne
 					&& distance( neutral, _enemyTower ) > _enemyTower.attackRange // do not approach enemy tower
 					&& win.id === hero.id && win.health > healthLimit ){ // check fight issue
