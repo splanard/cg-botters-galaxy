@@ -460,17 +460,29 @@ function laneRange( heroIdx ){
 	//printErr( '> ' + hero.name );
 	
 	// Role conf
+	var BATTLE_POSITION_TOLERANCE = 50;
 	var HEALTH_RATIO_BACK = 0.3;
 	var HEALTH_RATIO_POTION = 0.5;
 	var MIN_DISTANCE_FROM_MY_FRONT = 100;
 	
 	// Distance from enemy front to cover full lane height
 	var distanceFromEnemyFront = Math.trunc( Math.sqrt( Math.pow(hero.attackRange, 2) - Math.pow(LANE_HEIGHT/2, 2) ) );
+	
 	// Battle position
 	var battlePosition = {
 		'x': Math.max( _myTower.x, Math.min( _myFront - MIN_DISTANCE_FROM_MY_FRONT, _enemyFront - distanceFromEnemyFront ) ),
 		'y': hero.laneY
 	};
+	
+	// Stay away from DrStrange (out of Pull range)
+	var ds = enemyDoctorStrange();
+	if( ds ){
+		var distDs = distance( battlePosition, ds );
+		if( distDs <= RANGES.PULL ){
+			var tmp = battlePosition.x;
+			battlePosition.x = Math.trunc( ds.x - Math.sqrt( Math.pow( RANGES.PULL, 2 ) - Math.pow( ds.y - battlePosition.y, 2 ) ) ) - 1;
+		}
+	}
 	
 	// Fallback ?
 	var fallback = ( hero.health < hero.maxHealth * HEALTH_RATIO_BACK 
@@ -488,11 +500,11 @@ function laneRange( heroIdx ){
 	}
 	// ---
 	// Move the hero in battle position: just behind the front line but far enough from the enemy tower
-	if( distance( hero, battlePosition ) > 50 
+	if( distance( hero, battlePosition ) > BATTLE_POSITION_TOLERANCE 
 			&& distance( battlePosition, _enemyTower ) > _enemyTower.attackRange ){
-		if( !ironmanBlink( hero, battlePosition ) ){
+		//if( !ironmanBlink( hero, battlePosition ) ){
 			move( battlePosition.x, battlePosition.y );
-		}
+		//}
 		return;
 	}
 	// Enemy hero at range and no units can aggro: attack
@@ -934,6 +946,20 @@ function convertX( x ){
 
 function distance( e1, e2 ){
 	return Math.floor( Math.sqrt( Math.pow( e2.x - e1.x, 2 ) + Math.pow( e2.y - e1.y, 2 ) ) );
+}
+
+var _enemyDoctorStrangeId;
+function enemyDoctorStrange(){
+	if( _enemyDoctorStrangeId ){
+		return _units[_enemyDoctorStrangeId];
+	}
+	for( var i=0; i < _enemyHeroes.length; i++ ){
+		if( _enemyHeroes[i].name === 'DOCTOR_STRANGE' ){
+			_enemyDoctorStrangeId = _enemyHeroes[i].id;
+			return _units[_enemyDoctorStrangeId];
+		}
+	}
+	return;
 }
 
 function sortItemsByCostAsc( a, b ){
