@@ -93,6 +93,7 @@ for( var i = 0; i < itemCount; i++ ){
 		// HulkFarmer needs damage, health, maxHealth and moveSpeed
 		var farmerScore = 0;
 		if( item.damage > 0 ){ farmerScore++; }
+		if( item.manaRegeneration > 0 ){ farmerScore++; }
 		if( item.health > 0 ){ farmerScore++; }
 		if( item.maxHealth > 0 ){ farmerScore++; }
 		if( item.moveSpeed > 0 ){ farmerScore++; }
