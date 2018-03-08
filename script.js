@@ -539,7 +539,7 @@ function laneRange( heroIdx ){
 	// Enemy hero at range and no units can aggro: attack
 	if( hero.enemyHeroesAtRange.length > 0 && hero.enemyUnitsCanAggro.length === 0 ){
 		//attack( hero.enemyHeroesAtRange[0] );
-		genRangeMoveAttack( hero, hero.enemyHeroesAtRange[0] );
+		genSideMoveAttack( hero, hero.enemyHeroesAtRange[0] );
 		return;
 	}
 	// If a unit at range and last hit: attack
@@ -552,7 +552,7 @@ function laneRange( heroIdx ){
 	// Unit at range: attack
 	if( hero.enemyUnitsAtRange.length > 0 ){
 		//attack( hero.enemyUnitsAtRange[0] );
-		genRangeMoveAttack( hero, hero.enemyUnitsAtRange[0] );
+		genSideMoveAttack( hero, hero.enemyUnitsAtRange[0] );
 		return;
 	}
 	// Else, wait
@@ -707,7 +707,7 @@ function genItems( hero, itemSet ){
 	return false;
 }
 
-function genRangeMoveAttack( hero, targetId ){
+function genSideMoveAttack( hero, targetId ){
 	var target = _units[targetId];
 	var maxDY = Math.trunc( hero.movementSpeed * ( 1 - hero.attackSpeed ) );
 	// Target is above
