@@ -116,7 +116,7 @@ _itemSets.hulkFarmer.sort( sortItemsByCostAsc );
 
 // SKILLS
 // Init skill cooldowns
-var _skills = ['BASH', 'BLINK', 'BURNING', 'CHARGE', 'EXPLOSIVE_SHIELD', 'FIREBALL'];
+var _skills = ['BASH', 'BLINK', 'BURNING', 'CHARGE', 'EXPLOSIVE_SHIELD', 'FIREBALL', 'WIRE'];
 var _cooldowns = {};
 for( var i=0; i < _skills.length; i++ ){
 	_cooldowns[_skills[i]] = 0;
@@ -230,7 +230,10 @@ while( true ){
 				u.laneY = _myTower.y + DISTANCE_FROM_LANE_CENTER * (2 * _myHeroes.length - 1);
 				
 				// Hero-specific targets lists
-				if( u.name === 'HULK' ){
+				if( u.name === 'DEADPOOL' ){
+					u.atWireRange = [];
+				}
+				else if( u.name === 'HULK' ){
 					u.atBashRange = [];
 					u.atChargeRange = [];
 				}
@@ -333,6 +336,9 @@ while( true ){
 				}
 				
 				// Hero-specific distance checks
+				if( hero.name === 'DEADPOOL' && enemy.unitType === 'HERO' && d <= RANGES.WIRE ){
+					hero.atWireRange.push( enemy.id );
+				}
 				if( hero.name === 'HULK' && enemy.unitType === 'HERO' && d <= RANGES.CHARGE ){
 					hero.atChargeRange.push( enemy.id );
 					if( d <= RANGES.BASH ){ hero.atBashRange.push( enemy.id ); }
@@ -410,17 +416,40 @@ while( true ){
 function deadpool( heroIdx ){
 	var hero = _myHeroes[heroIdx];
 	
+	// Harass target
+	var hTarget;
+	var maxMana = 0;
+	for( var i=0; i < _enemyHeroes.length; i++ ){
+		if( _enemyHeroes[i].name === 'DOCTOR_STRANGE' ){
+			hTarget = _enemyHeroes[i];
+			break;
+		}
+		else if( _enemyHeroes[i].maxMana > maxMana ){
+			hTarget = _enemyHeroes[i];
+			maxMana = _enemyHeroes[i].maxMana;
+		}
+	}
+	
 	// Battle position
+	/*
 	var delta = Math.trunc( Math.sqrt( Math.pow( hero.attackRange, 2 ) / 2 ) );
 	var battlePosition = {
 		'x': Math.max( _myTower.x, Math.min( _enemyFront.x - delta, _myFront.x + 50 ) ),
 		'y': Math.trunc( _enemyFront.top - delta )
 	};
+	*/
+	var hidings = [];
+	for( var i=0; i < _bushes.length; i++ ){
+		var bush = _bushes[i];
+		if( bush.y < 450 && bush.y >= 350 
+				&& distance( bush, _enemyTower ) > _enemyTower.attackRange
+				&& bush.x < hTarget.x ){
+			hidings.push( bush );
+		}
+	}
+	hidings.sort( function(a, b){ return distance( a, hTarget ) - distance( b, hTarget ); } );
 	
-	printErr( 'Units at range: ' + hero.enemyUnitsAtRange );
-	printErr( 'Units at MA range: ' + hero.enemyUnitsAtMoveAttackRange );
-	printErr( 'Heroes at range: ' + hero.enemyUnitsAtRange );
-	
+	/*
 	if( hero.enemyUnitsAtMoveAttackRange.length > 0 ){
 		var target = _units[ hero.enemyUnitsAtMoveAttackRange[0] ];
 		printErr( 'Distance with target: ' + distance( hero, target ) );
@@ -430,8 +459,17 @@ function deadpool( heroIdx ){
 	if( hero.enemyUnitsAtRange.length > 0 ){
 		attack( hero.enemyUnitsAtRange[0] ); return;
 	}
+	*/
 	
-	moveSafe( battlePosition.x, battlePosition.y );
+	if( genItems( hero, 'laneRange' )
+			|| deadpoolWire( hero, hTarget ) ){
+		return;
+	}
+	if( hidings.length > 0 ){
+		moveSafe( hidings[0].x, hidings[0].y );
+	} else {
+		moveSafe( _myFront.x, _myFront.top - 50 );
+	}
 }
 
 /*
@@ -720,6 +758,41 @@ function genItems( hero, itemSet ){
 
 // Skills algo functions
 
+function deadpoolWire( hero, target ){
+	if( hero.name === 'DEADPOOL' && _cooldowns.WIRE === 0 && hero.mana >= 50 ){
+		// Skill conf
+		var RADIUS = 50;
+		
+		//for( var i=0; i < hero.atWireRange.length; i++ ){
+		//var target = _units[hero.atWireRange[i]];
+		var d = distance( hero, target );
+		var count = 0;
+		var incrementX = Math.trunc( ( target.x - hero.x ) * RADIUS / d );
+		var incrementY = Math.trunc( ( target.y - hero.y ) * RADIUS / d );
+		var x = hero.x + incrementX;
+		var y = hero.y + incrementY;
+		var obstacle = false;
+		while( count < d / RADIUS && !obstacle ){
+			printErr('Analyzing point (' + x + ',' + y + ')');
+			for( var j=0; j < _units.length; j++ ){
+				var u = _units[j];
+				if( distance( u, {'x':x, 'y':y} ) <= RADIUS && u.id !== target.id ){
+					obstacle = true;
+				}
+			}
+			count++;
+			x += incrementX;
+			y += incrementY;
+		}
+		if( !obstacle ){
+			wire( target.x, target.y );
+			return true;
+		}
+		//}
+	}
+	return false;
+}
+
 function hulkBash( hero ){
 	if( hero.name === 'HULK' && _cooldowns.BASH === 0 && hero.mana >= 40 && hero.atBashRange.length > 0 ){
 		hero.atBashRange.sort( sortByHealthAsc );
@@ -959,6 +1032,11 @@ function explosiveShield(){
 function fireball( x, y ){
 	print('FIREBALL ' + convertX(x) + ' ' + y + ';FIREBALL !');
 	_cooldowns.FIREBALL = 6;
+}
+
+function wire( x, y ){
+	print('WIRE ' + convertX(x) + ' ' + y + ';WIRE !');
+	_cooldowns.WIRE = 9;
 }
 
 // Utility functions
