@@ -81,9 +81,9 @@ for( var i = 0; i < itemCount; i++ ){
 //		if( item.damage > 0 ){ farmerScore++; }
 //		if( item.health > 0 ){ farmerScore++; }
 //		if( item.maxHealth > 0 ){ farmerScore++; }
+		if( item.manaRegeneration > 0 ){ farmerScore++; }
 //		if( item.moveSpeed > 0 ){ farmerScore++; }
-//		if( farmerScore >= 2 ){
-		if( item.mana > 0 ){
+		if( farmerScore >= 1 ){
 			_itemSets.hulkFarmer.push( item.name );
 		}
 	}
@@ -391,8 +391,31 @@ function hulkFarmer( heroIdx ){
 	var HEALTH_RATIO_POTION = 0.5;
 	var ITEMS_SET = 'hulkFarmer';
 	
-	// Order spawn points by distance from my tower
-	_spawnPoints.sort( function(a, b){ return distance( _myTower, a ) - distance( _myTower, b ); } );
+	// Harass target
+	var hTarget;
+	var health = 3000;
+	for( var i=0; i < _enemyHeroes.length; i++ ){
+		if( _enemyHeroes[i].name === 'DOCTOR_STRANGE' ){
+			hTarget = _enemyHeroes[i];
+			break;
+		}
+		else if( _enemyHeroes[i].health < health ){
+			hTarget = _enemyHeroes[i];
+			health = _enemyHeroes[i].health;
+		}
+	}
+	
+	// Hiding position
+	var hidings = [];
+	for( var i=0; i < _bushes.length; i++ ){
+		var bush = _bushes[i];
+		if( bush.y < 450 && bush.y >= 300 
+				&& distance( bush, _enemyTower ) > _enemyTower.attackRange
+				&& bush.x < hTarget.x - 100 ){
+			hidings.push( bush );
+		}
+	}
+	hidings.sort( function(a, b){ return distance( a, hTarget ) - distance( b, hTarget ); } );
 	
 	// ---
 	// My tower is under attack: go back to base
@@ -417,7 +440,8 @@ function hulkFarmer( heroIdx ){
 	}
 	
 	// Ambush
-	if( hulkAmbush( hero ) ){ return; }
+	if( genFarm( hero, HEALTH_LEVEL_BACK, hulkExplosiveShield )
+			|| hulkAmbush( hero, hTarget ) ){ return; }
 	/*
 	// Farm, bash or charge
 	if( genFarm( hero, HEALTH_LEVEL_BACK, hulkExplosiveShield ) 
@@ -446,7 +470,12 @@ function hulkFarmer( heroIdx ){
 	}
 	
 	// Else, move to the front line
-	moveSafe( _myFront - 10, _myTower.y - 150 );
+	if( hidings.length > 0 ){
+		moveSafe( hidings[0].x, hidings[0].y );
+	} else {
+		moveSafe( _myFront - 10, _myTower.y - 150 );
+	}
+	
 	//moveSafe( _enemyFront - 100, _myTower.y - Math.sqrt( 300*300 - 150*150 ) );
 }
 
@@ -663,7 +692,7 @@ function genItems( hero, itemSet ){
 
 // Skills algo functions
 
-function hulkAmbush( hero ){
+function hulkAmbush( hero, pTarget ){
 	if( hero.name === 'HULK' ){
 		printErr('Ambush evaluation...');
 		printErr('  Mana: ' + hero.mana);
@@ -677,7 +706,7 @@ function hulkAmbush( hero ){
 				
 		var combo = _combos.HULK_AMBUSH;
 		printErr('  Combo: ' + stringify( combo ));
-		printErr('  At range: ' + hero.atAmbushRange );
+		//printErr('  At range: ' + hero.atAmbushRange );
 		// Combo already started: continue
 		if( combo.step >= 0 ){
 			printErr('Combo started');
@@ -742,11 +771,12 @@ function hulkAmbush( hero ){
 		// Combo start
 		else if( _cooldowns.EXPLOSIVE_SHIELD === 0 && _cooldowns.CHARGE === 0 && _cooldowns.BASH === 0 
 				&& hero.mana >= SHIELD_MANA_COST + CHARGE_MANA_COST + BASH_MANA_COST - 2 * hero.manaRegeneration
-				&& hero.atAmbushRange.length > 0 ){
+				&& distance( pTarget, hero ) <= 250 ){
+				// && hero.atAmbushRange.length > 0 ){
 			printErr('Check combo conditions');
-			var target;
-			for( var i=0; i < hero.atAmbushRange.length; i++ ){
-				var pTarget = _units[hero.atAmbushRange[i]];
+			//var target;
+			//for( var i=0; i < hero.atAmbushRange.length; i++ ){
+				//var pTarget = _units[hero.atAmbushRange[i]];
 				printErr('Target[' + pTarget.id + ']');
 				if( true || pTarget.health <= 2.5 * hero.attackRange || pTarget.name === 'DOCTOR_STRANGE' ){
 					// Check units around who can aggro or other enemy heroes
@@ -764,16 +794,22 @@ function hulkAmbush( hero ){
 					}
 					printErr('  aggro = ' + aggro);
 					if( aggro <= AGGRO_MAX ){
-						target = pTarget;
+						//target = pTarget;
+						printErr('Ambush !!');
+						combo.step = 0;
+						combo.arg = pTarget.id;
+						explosiveShield(); return true;
 					}
 				}
-			}
+			//}
+			/*
 			if( target ){
 				printErr('Ambush !!');
 				combo.step = 0;
 				combo.arg = target.id;
 				explosiveShield(); return true;
 			}
+			*/
 		}
 	}
 	return false;
