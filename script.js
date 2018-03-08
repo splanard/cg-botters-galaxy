@@ -455,6 +455,13 @@ function hulkFarmer( heroIdx ){
 		attack( hero.enemyHeroesAtRange[0] );
 		return;
 	}
+	// If a unit at range and last hit: attack
+	if( hero.enemyUnitsAtRange.length > 0 && _units[hero.enemyUnitsAtRange[0]].health <= hero.attackDamage ){
+		attack( hero.enemyUnitsAtRange[0] );
+		return;
+	}
+	// Deny if possible
+	if( genDeny( hero ) ){ return; }
 	// Unit at move-attack range
 	if( hero.enemyUnitsAtMoveAttackRange.length > 0 ){
 		var target = _units[ hero.enemyUnitsAtMoveAttackRange[0] ];
