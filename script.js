@@ -218,6 +218,7 @@ while( true ){
 			// My hero
 			if( u.team === _myTeam ){
 				u.enemyUnitsAtRange = []; // IDs of all enemy units at range
+				u.enemyUnitsAtMoveAttackRange = [];
 				u.enemyHeroesAtRange = []; // IDs of all enemy heroes at range
 				u.threateningUnits = []; // IDs of all enemy units from which my hero is at range
 				u.threateningHeroes = []; //IDs of all enemy heroes from which my hero is at range
@@ -312,17 +313,23 @@ while( true ){
 						hero.enemyHeroesAtRange.push( enemy.id );
 					}
 				}
-				// Lane unit threatening my hero
-				if( enemy.unitType === 'UNIT' && d <= enemy.attackRange ){
-					hero.threateningUnits.push( enemy.id );
+				// At move-attack range of my hero
+				else if( d <= hero.attackRange + hero.movementSpeed * ( 1 - hero.attackSpeed ) ){
+					if( enemy.unitType === 'UNIT' ){
+						hero.enemyUnitsAtMoveAttackRange.push( enemy.id );
+					}
 				}
+				// Threatening my hero
+				if( d <= enemy.attackRange ){
+					if( enemy.unitType === 'UNIT' ){
+						hero.threateningUnits.push( enemy.id );
+					} else {
+						hero.threateningHeroes.push( enemy.id );
+					}
+ 				}
 				// Lane units who can aggro my hero
 				if( enemy.unitType === 'UNIT' && d <= AGGRO_DISTANCE ){
 					hero.enemyUnitsCanAggro.push( enemy.id );
-				}
-				// Enemy hero threatening mine
-				if( enemy.unitType === 'HERO' && d <= enemy.attackRange ){
-					hero.threateningHeroes.push( enemy.id );
 				}
 				
 				// Hero-specific distance checks
@@ -411,9 +418,10 @@ function hulkFarmer( heroIdx ){
 	var HEALTH_LEVEL_BACK = 250;
 	var HEALTH_RATIO_POTION = 0.5;
 	var ITEMS_SET = 'hulkFarmer';
+	var THREAT_LEVEL_BACK = 5;
 	
-	// Order spawn points by distance from my tower
-	_spawnPoints.sort( function(a, b){ return distance( _myTower, a ) - distance( _myTower, b ); } );
+	// Threat level
+	var threat = hero.threateningUnits.length + 3 * hero.threateningHeroes.length;
 	
 	// ---
 	// My tower is under attack: go back to base
@@ -423,17 +431,9 @@ function hulkFarmer( heroIdx ){
 	}
 	// ---
     // Fall back ? Health potion ? Items ?
-	if( genFallback( hero, hero.health < HEALTH_LEVEL_BACK )
+	if( genFallback( hero, hero.health < HEALTH_LEVEL_BACK || ( hero.shield === 0 && hero.underAttack && threat >= THREAT_LEVEL_BACK ) )
 			|| genHealthPotion( hero, hero.maxHealth * HEALTH_RATIO_POTION )
 			|| genItems( hero, ITEMS_SET ) ){
-		return;
-	}
-	// Do not engage too much enemies at the same time without shield
-	if( hero.shield === 0 && hero.underAttack 
-			&& ( hero.threateningHeroes.length === 2 || hero.threateningHeroes.length + hero.threateningUnits.length >= 4 ) ){
-		if( !hulkExplosiveShield( hero ) ){
-			back( hero );
-		}
 		return;
 	}
 	// Farm, bash or charge
@@ -442,17 +442,30 @@ function hulkFarmer( heroIdx ){
 			|| hulkCharge( hero ) ){
 		return;
 	}
+	// Shield if threat level is high
+	if( threat >= 4 && hulkExplosiveShield( hero ) ){
+		return;
+	}
 	// Enemy hero at range and alone: if I would win, fight!
 	if( hero.enemyHeroesAtRange.length > 0
 			&& hero.threateningHeroes.length <= 1
-			&& hero.enemyUnitsCanAggro.length === 0 
-			&& winner( hero, _units[hero.enemyHeroesAtRange[0]] ).id === hero.id ){
-		hulkShieldAndAttack( hero, hero.enemyHeroesAtRange[0] );
+			&& hero.enemyUnitsCanAggro.length === 0 ){
+		//hulkShieldAndAttack( hero, hero.enemyHeroesAtRange[0] );
+		attack( hero.enemyHeroesAtRange[0] );
 		return;
+	}
+	// Unit at move-attack range
+	if( hero.enemyUnitsAtMoveAttackRange.length > 0 ){
+		var target = _units[ hero.enemyUnitsAtMoveAttackRange[0] ];
+		var move = ratioPoint( hero, target, -hero.attackRange );
+		if( move.x < _myFront.x ){
+			moveAttack( move.x, move.y, target.id ); return;
+		}
 	}
 	// Unit at range: fight
 	if( hero.enemyUnitsAtRange.length > 0 ){
-		hulkShieldAndAttack( hero, hero.enemyUnitsAtRange[0] );
+		//hulkShieldAndAttack( hero, hero.enemyUnitsAtRange[0] );
+		attack( hero.enemyUnitsAtRange[0] );
 		return;
 	}
 	
@@ -991,6 +1004,44 @@ function enemyDoctorStrange(){
 		}
 	}
 	return;
+}
+
+function pythagore( hypo, side ){
+	return Math.sqrt( Math.pow( hypo, 2 ) - Math.pow( side, 2 ) );
+}
+
+/*
+ * Calculates the coordinates of an intermediary point (I) located between 
+ * a position point (P) and a target point (T).
+ * 
+ * If dist >= 0, it's the wanted PI distance : we want to move {dist} distance
+ * from P, in the direction of T.
+ * 
+ * If dist < 0, it's the wanted IT distance : we want to move from P, in the direction
+ * of T, but staying at {dist} distance from T.
+ * 
+ */
+function ratioPoint( position, target, dist ){
+	var d = distance( position, target );
+	// Case dist > PT
+	if( dist >= d ){
+		return dist >= 0 ? { 'x': target.x, 'y': target.y } : { 'x': position.x, 'y': position.y };
+	}
+	// Distance from P
+	if( dist >= 0 ){
+		return {
+			'x': position.x - Math.trunc( (target.x - position.x) * dist / d ),
+			'y': position.y - Math.trunc( (target.y - position.y) * dist / d )
+		};
+	}
+	// Distance from T
+	if( dist < 0 ){
+		dist = -dist;
+		return {
+			'x': target.x - Math.trunc( (target.x - position.x) * dist / d ),
+			'y': target.y - Math.trunc( (target.y - position.y) * dist / d )
+		};
+	}
 }
 
 function sortItemsByCostAsc( a, b ){
